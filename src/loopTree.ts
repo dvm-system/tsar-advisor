@@ -7,7 +7,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-'use strict';
 
 import * as vscode from 'vscode';
 import {headHtml, UpdateUriFunc, commandLink,
@@ -53,7 +52,55 @@ interface Info {
 interface Data {
   FunctionList: msg.FunctionList;
   Info: Map<msg.Function|msg.Loop,Info>;
+  Configuration: {
+    sort_key : SortKey,
+    sort_type : SortType,
+    sort_conf : "Yes" | 'No'
+  }
 };
+
+export type SortKey = 'Parallel' | 'Canonical' | 'Perfect' | 'Exit' | 'IO' | 'Readonly' | 'UnsafeCFG' | 'NoSort'
+export type SortType = 'ASC' | 'DESC'
+
+
+
+export const DefaultSortDESC = (a : msg.Function | msg.Loop & {Name : string}, b: msg.Function | msg.Loop & {Name : string}) => {
+  if (a.StartLocation.Line > b.StartLocation.Line) return 1
+  if (a.StartLocation.Line < b.StartLocation.Line) return -1
+  if (a.StartLocation.Column > b.StartLocation.Column ) return 1
+  if (a.StartLocation.Column < b.StartLocation.Column ) return -1
+  if (a.Name > b.Name ) return 1
+  if (a.Name < b.Name ) return -1
+  return 0
+}
+
+export const DefaultSortASC = (a : msg.Function | msg.Loop & {Name : string}, b: msg.Function | msg.Loop & {Name : string}) => {
+  if (a.StartLocation.Line > b.StartLocation.Line) return -1
+  if (a.StartLocation.Line < b.StartLocation.Line) return 1
+  if (a.StartLocation.Column > b.StartLocation.Column ) return -1
+  if (a.StartLocation.Column < b.StartLocation.Column ) return 1
+  if (a.Name > b.Name ) return -1
+  if (a.Name < b.Name ) return 1
+  return 0
+}
+
+export const BoolSort = (a : string,  b: string, type : SortType) => {
+  if (a === 'Yes' && type == 'DESC') return -1
+  if (a === 'Yes' && type == 'ASC') return 1
+  if (b === 'Yes' && type == 'DESC' ) return 1
+  if (b=== 'Yes' && type == 'ASC' ) return -1
+  return 0
+}
+
+export const ExitSort = (a : number, b: number, type : SortType) => {
+  if (a == null) return 1
+  if (b == null) return -1
+  if (a > b && type == 'DESC') return -1
+  if (a > b && type == 'ASC') return 1
+  if (a < b && type == 'DESC') return 1
+  if (a < b && type == 'ASC') return -1
+  return 0
+}
 
 export class LoopTreeProviderState extends ProjectWebviewProviderState<LoopTreeProvider> {
 
@@ -75,17 +122,41 @@ export class LoopTreeProviderState extends ProjectWebviewProviderState<LoopTreeP
     return false;
   }
 
+  openSortConf(current : 'Yes'| 'No'){
+    if (current == 'Yes'){
+      (this._data as Data).Configuration.sort_conf = 'No'
+    } else {
+      (this._data as Data).Configuration.sort_conf = 'Yes'
+    }
+  }
+
+  getSortConfiguration(){
+    return {
+      type : ( this._data as Data ).Configuration.sort_type,
+      key : ( this._data as Data ).Configuration.sort_key,
+      open : ( this._data as Data ).Configuration.sort_conf,
+    }
+  }
+
   onResponse(response: any): Thenable<any> {
     return new Promise(resolve => {
       if (response !== undefined) {
         if (response instanceof msg.FunctionList) {
           this._data = {
             FunctionList: response,
-            Info: new Map<any, Info>()
+            Info: new Map<any, Info>(),
+            Configuration:  {
+              sort_key : 'NoSort',
+              sort_type : 'DESC',
+              sort_conf : 'No'
+            }
           };
         } else if (this._data != undefined) {
           // Add loop tree to the function representation.
           let looptree = response as msg.LoopTree;
+          this._data = {
+            ...this._data,
+          }
           for (let f of (this._data as Data).FunctionList.Functions) {
             if (f.ID != looptree.FunctionID)
               continue;
@@ -96,9 +167,67 @@ export class LoopTreeProviderState extends ProjectWebviewProviderState<LoopTreeP
         }
       }
       resolve(this._data !== undefined
-        ? (this._data as Data).FunctionList 
+        ? (this._data as Data).FunctionList
         : undefined);
     });
+  }
+
+  public setSortParam(key : SortKey = 'NoSort', type : SortType = 'DESC'){
+    if (key){
+      (this._data as Data).Configuration.sort_key = key;
+    }
+    if (type){
+      (this._data as Data).Configuration.sort_type = type;
+    }
+  }
+
+  public sortFunction(key : SortKey = 'NoSort', type : SortType = 'DESC'){
+    this._data.FunctionList.Functions = (this._data as Data).FunctionList.Functions
+    .map(fun=>{
+      if (fun.Traits.Loops == 'Yes'){
+        return {
+          ...fun,
+          Loops : fun.Loops
+          .map(L=>{ return {...L, Name : fun.Name} as msg.Loop & {Name : string}})
+          .sort((a, b) => {
+            switch (key){
+              case 'NoSort' :
+                return type == 'ASC' ? DefaultSortASC(a,b) : DefaultSortDESC(a,b)
+              case 'Parallel':
+                return BoolSort(a.Traits.Parallel, b.Traits.Parallel, type)
+              case 'IO':
+                return BoolSort(a.Traits.InOut, b.Traits.InOut, type)
+              case 'Canonical':
+                return BoolSort(a.Traits.Canonical, b.Traits.Canonical, type)
+              case 'Perfect':
+                return BoolSort(a.Traits.Perfect, b.Traits.Perfect, type)
+              case 'UnsafeCFG':
+                return BoolSort(a.Traits.UnsafeCFG, b.Traits.UnsafeCFG, type)
+              case 'Exit':
+                return ExitSort(a.Exit,b.Exit, type)
+              default: return 0
+            }
+          })
+        }
+      } else return fun
+    })
+    .sort((a,b)=>{
+      switch (key){
+        case 'NoSort' :
+          return type == 'ASC' ? DefaultSortASC(a,b) : DefaultSortDESC(a,b)
+        case 'Parallel':
+          return BoolSort(a.Traits.Parallel, b.Traits.Parallel, type)
+        case 'IO':
+          return BoolSort(a.Traits.InOut, b.Traits.InOut, type)
+        case 'Readonly':
+          return BoolSort(a.Traits.Readonly, b.Traits.Readonly, type)
+        case 'UnsafeCFG':
+          return BoolSort(a.Traits.UnsafeCFG, b.Traits.UnsafeCFG, type)
+        case 'Exit':
+          return ExitSort(a.Exit,b.Exit, type)
+        default: return 0
+      }
+    })
   }
 
   public setSubtreeHidden(hidden: boolean, f: msg.Function, l: msg.Loop = undefined) {
@@ -140,7 +269,7 @@ export class LoopTreeProvider extends ProjectWebviewProvider {
       asWebviewUri: UpdateUriFunc): string {
     let state = project.providerState(
       LoopTreeProvider.scheme) as LoopTreeProviderState;
-    this._registerListeners(state, funclst);
+    this._registerListeners(project, state, funclst);
     let aliasTree = {
       command: 'tsar.loop.alias',
       project: project,
@@ -181,34 +310,183 @@ export class LoopTreeProvider extends ProjectWebviewProvider {
     <html lang="en">
       ${headHtml(asWebviewUri)}
       <body>`;
-    body +=`
-      <script>
-        const vscode = acquireVsCodeApi();
-        window.addEventListener('message', event => {
-          const message = event.data;
-          switch (message.command) {
-            case 'Subtree':
-              const id = '#loopTree-' + message.func +
-                ('loop' in message ? '-' + message.loop : '');
-              if (message.hide === 'true')
-                $(id).collapse('hide');
-              else
-                $(id).collapse('show');
-              break;
-          }
+    body += `
+    <script>
+      const vscode = acquireVsCodeApi();
+      window.addEventListener('message', event => {
+        const message = event.data;
+        switch (message.command) {
+          case 'Subtree':
+            const id = '#loopTree-' + message.func +
+              ('loop' in message ? '-' + message.loop : '');
+            if (message.hide === 'true')
+              $(id).collapse('hide');
+            else
+              $(id).collapse('show');
+          break;
+          case 'Sort':
+            //const test_text = document.getElementById('test_text')
+            //test_text.style.color = 'red'
+
+            const conf_sort_button = document.getElementById('config-button')
+            const sort_config = document.getElementById('sort-config')
+            const conf_sort_asc = document.getElementById('conf_sort_asc')
+            const conf_sort_desc = document.getElementById('conf_sort_desc')
+            const select_config_key = document.getElementById('select_config_key')
+
+            if (message.open == 'Yes'){
+              conf_sort_button.classList.add("orange");
+              sort_config.classList.remove("d-none");
+              sort_config.classList.add("d-flex");
+            } else {
+              conf_sort_button.classList.remove("orange");
+              sort_config.classList.remove("d-flex");
+              sort_config.classList.add("d-none");
+            }
+
+            if (message.type == 'ASC'){
+              conf_sort_desc.classList.remove("background_orange")
+              conf_sort_asc.classList.add("background_orange");
+            } else {
+              conf_sort_asc.classList.remove("background_orange")
+              conf_sort_desc.classList.add("background_orange");
+            }
+
+            select_config_key.value = message.key;
+
+            break;
+        }
       });
-      </script>`;
+    </script>`;
     body +=`
-      <div class="row font-weight-bolder border-bottom py-3 text-center">
-        <div class="col-4 text-left border-right">Functions and Loops</div>
-        <div class="col-1">Parallel</div>
-        <div class="col-1">Canonical</div>
-        <div class="col-1">Perfect</div>
-        <div class="col-1">Exit</div>
-        <div class="col-1">IO</div>
-        <div class="col-1">Readonly</div>
-        <div class="col-1">Unsafe CFG</div>
+      <div class="row font-weight-bolder border-bottom py-3 text-center align-items-center">
+        <div class="col-4 border-right">
+          <div class = "d-flex justify-content-between align-items-center">
+            <div id="test_text"> Functions and Loops </div>
+            <div class="btn-group ml-4" role="group" >
+              <button type="button" id="sort-button" class="btn btn-priamry  btn-sm " title="Sort items" data-toggle="tooltip" data-placement="bottom">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  fill="currentColor"
+                  class="bi bi-sort-up"
+                  viewBox = "0 0 16 16"
+                >
+                <path d="M3.5 12.5a.5.5 0 0 1-1 0V3.707L1.354 4.854a.5.5 0 1 1-.708-.708l2-1.999.007-.007a.498.498 0 0 1 .7.006l2 2a.5.5 0 1 1-.707.708L3.5 3.707V12.5zm3.5-9a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1-.5-.5zM7.5 6a.5.5 0 0 0 0 1h5a.5.5 0 0 0 0-1h-5zm0 3a.5.5 0 0 0 0 1h3a.5.5 0 0 0 0-1h-3zm0 3a.5.5 0 0 0 0 1h1a.5.5 0 0 0 0-1h-1z"></path>
+                </svg>
+              </button>
+                <button
+                  type="button" id="config-button"
+                  class="btn btn-priamry  btn-sm ${state.getSortConfiguration().open == 'Yes' ? 'orange' : '' }"
+                  data-toggle="tooltip"
+                  title="Open/close sort configuration"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg"
+                    width="16"
+                    height="16"
+                    fill="currentColor"
+                    class="bi bi-gear"
+                    viewBox="0 0 16 16"
+                  >
+                    <path d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492zM5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0z"></path>
+                    <path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52l-.094-.319zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 0 0 2.693 1.115l.291-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 0 0 1.116 2.692l.318.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 0 0-1.115 2.693l.16.291c.415.764-.42 1.6-1.185 1.184l-.291-.159a1.873 1.873 0 0 0-2.693 1.116l-.094.318c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 0 0-2.692-1.115l-.292.16c-.764.415-1.6-.42-1.184-1.185l.159-.291A1.873 1.873 0 0 0 1.945 8.93l-.319-.094c-.835-.246-.835-1.428 0-1.674l.319-.094A1.873 1.873 0 0 0 3.06 4.377l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 1.873 0 0 0 2.692-1.115l.094-.319z"></path>
+                  </svg>
+                </button>
+            </div>
+          </div>
+          <div id="sort-config" class=" ${state.getSortConfiguration().open == 'Yes' ? 'd-flex' : 'd-none' } w-100 justify-content-end align-items-center ">
+            <div class="btn-group mr-2  mt-2" role="group">
+              <button type="button" id="conf_sort_asc" class="btn btn-secondary btn-xs ${state.getSortConfiguration().type == 'ASC' ? 'background_orange' : '' }">ASC</button>
+              <button type="button" id="conf_sort_desc"  class="btn btn-secondary btn-xs ${state.getSortConfiguration().type == 'DESC' ? 'background_orange' : '' }">DESC</button>
+            </div>
+            <select id="select_config_key" class="form-select form-select-sm w-50 mt-2 mr-1 ">
+              <option ${state.getSortConfiguration().key == 'NoSort' ? 'selected' : '' } value="NoSort">Default</option>
+              <option ${state.getSortConfiguration().key == 'Parallel' ? 'selected' : '' } value="Parallel">Parallel</option>
+              <option ${state.getSortConfiguration().key == 'Canonical' ? 'selected' : '' } value="Canonical">Canonical</option>
+              <option ${state.getSortConfiguration().key == 'Perfect' ? 'selected' : '' } value="Perfect">Perfect</option>
+              <option ${state.getSortConfiguration().key == 'Exit' ? 'selected' : '' } value="Exit">Exit</option>
+              <option ${state.getSortConfiguration().key == 'IO' ? 'selected' : '' } value="IO">IO</option>
+              <option ${state.getSortConfiguration().key == 'Readonly' ? 'selected' : '' } value="Readonly">Readonly</option>
+              <option ${state.getSortConfiguration().key == 'UnsafeCFG' ? 'selected' : '' } value="UnsafeCFG">UnsafeCFG</option>
+            </select>
+          </div>
+          <script>
+            const sort_button = document.getElementById('sort-button')
+            const conf_sort_button = document.getElementById('config-button')
+            const sort_config = document.getElementById('sort-config')
+            const conf_sort_asc = document.getElementById('conf_sort_asc')
+            const conf_sort_desc = document.getElementById('conf_sort_desc')
+            const select_config_key = document.getElementById('select_config_key')
+            select_config_key.addEventListener('change', (e)=>{
+              vscode.postMessage({ command: 'SetSortKey', key :  e.target.value, type : null});
+            })
+            conf_sort_asc.addEventListener('click', ()=>{
+              vscode.postMessage({ command: 'SetSortTypeASC', key : null, type : 'ASC'});
+              conf_sort_desc.classList.remove("background_orange")
+              conf_sort_asc.classList.add("background_orange");
+            })
+            conf_sort_desc.addEventListener('click', ()=>{
+              vscode.postMessage({ command: 'SetSortTypeDESC',  key : null, type : 'DESC'});
+              conf_sort_asc.classList.remove("background_orange")
+              conf_sort_desc.classList.add("background_orange");
+            })
+            sort_button.addEventListener('click', ()=>{
+              vscode.postMessage({ command: 'Sort'});
+            })
+            conf_sort_button.addEventListener('click', ()=>{
+              const status = conf_sort_button.classList.contains("orange")
+              if (status){
+                conf_sort_button.classList.remove("orange")
+                conf_sort_button.classList.add("black");
+                sort_config.classList.remove("d-flex")
+                sort_config.classList.add("d-none")
+                vscode.postMessage({ command: 'OpenSortConf', current : 'Yes'});
+              } else {
+                conf_sort_button.classList.remove("black")
+                conf_sort_button.classList.add("orange");
+                sort_config.classList.remove("d-none")
+                sort_config.classList.add("d-flex")
+                vscode.postMessage({ command: 'OpenSortConf', current : 'No'});
+              }
+            })
+          </script>
+        </div>
+        <div class="col-1 d-flex justify-content-center">
+          <div class="text-nowrap"> Parallel </div>
+        </div>
+        <div class="col-1  d-flex justify-content-center">
+          <div class="text-nowrap">
+            Canonical
+          </div>
+        </div>
+        <div class="col-1  d-flex justify-content-center">
+          <div class="text-nowrap">
+            Perfect
+          </div>
+        </div>
+        <div class="col-1  d-flex justify-content-center">
+          <div class="text-nowrap">
+            Exit
+          </div>
+        </div>
+        <div class="col-1  d-flex justify-content-center">
+          <div class="text-nowrap">
+            IO
+          </div>
+        </div>
+        <div class="col-1  d-flex justify-content-center">
+          <div class="text-nowrap">
+            Readonly
+          </div>
+        </div>
+        <div class="col-1  d-flex justify-content-center">
+          <div class="text-nowrap">
+            Unsafe CFG
+          </div>
+        </div>
       </div>`;
+
     for (let func of funclst.Functions) {
       if (!func.User)
         continue;
@@ -225,7 +503,7 @@ export class LoopTreeProvider extends ProjectWebviewProvider {
       body += `
       <div class="row py-2 text-center border-bottom table-row
            ${func.Traits.Parallel == 'Yes' ? 'table-row-success' : ''}">
-        <div class="col-4 text-left border-right">`;
+        <div class="col-4 text-left border-right ">`;
       if (func.Traits.Loops == "Yes")
         if (!func.Loops.length) {
           body += commandLink({
@@ -347,7 +625,7 @@ export class LoopTreeProvider extends ProjectWebviewProvider {
         body += `
         <div class="row py-2 text-center border-bottom table-row
                     ${loop.Traits.Parallel == 'Yes' ? 'table-row-success' : ''}">
-          <div class="col-4 text-left border-right">
+          <div class="col-4  d-flex  justify-content-start align-items-center border-right">
             ${'&emsp;'.repeat(loop.Level)}`;
         if (idx < func.Loops.length - 1 && func.Loops[idx + 1].Level > loop.Level) {
           let isSubtreeHidden = state.isSubtreeHidden(loop);
@@ -366,9 +644,9 @@ export class LoopTreeProvider extends ProjectWebviewProvider {
           body += '&emsp;'
         }
         body += `
-            <var>${loop.Type.toLowerCase()}</var> loop in <var>${func.Name}</var> at
-              ${gotoExpansionLocLink(project, loop.StartLocation)}
-              &minus;${gotoExpansionLocLink(project, loop.EndLocation)}
+            <var class="mr-1">${loop.Type.toLowerCase()}</var> loop in <var class="mr-1 ml-1">${func.Name}</var> at
+              <span class="mr-1 ml-1"> ${gotoExpansionLocLink(project, loop.StartLocation)}</span>
+              &minus;<span class="ml-1 mr-1">${gotoExpansionLocLink(project, loop.EndLocation)}</span>
             ${loop.Exit !== null ? commandLink(linkCallees) : ''}
             ${loop.Exit !== null ? commandLink(aliasTree) : ''}
           </div>
@@ -396,24 +674,48 @@ export class LoopTreeProvider extends ProjectWebviewProvider {
     return body;
   }
 
-  private _registerListeners(state: LoopTreeProviderState, funclst: msg.FunctionList) {
+  private _registerListeners(project: Project, state: LoopTreeProviderState, funclst: msg.FunctionList) {
     let panel = state.panel;
     panel.webview.onDidReceiveMessage(message => {
       switch(message.command) {
         case 'Subtree':
           let f = funclst.Functions.find(f => { return f.ID == message.func});
           if (!('loop' in message))
-            state.setSubtreeHidden(message.hide === 'true', f);
+            state.setSubtreeHidden(message.hide === 'false', f);
           else
-            state.setSubtreeHidden(message.hide === 'true',
+            state.setSubtreeHidden(message.hide === 'false',
               f, f.Loops.find(l => { return l.ID == message.loop}));
           break;
+        case 'Sort':
+          const dt = (state.data as Data)
+          state.sortFunction(dt.Configuration.sort_key, dt.Configuration.sort_type)
+          this.update(project)
+          break;
+        case 'OpenSortConf':
+          state.openSortConf(message.current)
+          break;
+        case 'SetSortKey':
+          state.setSortParam(message.key, message.type)
+          break;
+        case 'SetSortTypeASC':
+          state.setSortParam(message.key, message.type)
+          break;
+        case 'SetSortTypeDESC':
+          state.setSortParam(message.key, message.type)
+          break;
+
       }
     }, null, state.disposables);
     panel.onDidChangeViewState(e => {
       const panel = e.webviewPanel;
       if (!panel.visible)
         return;
+      panel.webview.postMessage({
+        command: 'Sort',
+        open: (state.data as Data).Configuration.sort_conf,
+        type: (state.data as Data).Configuration.sort_type,
+        key: (state.data as Data).Configuration.sort_key,
+      });
       for (let [key,value] of (state.data as Data).Info) {
         if (isFunction(key))
           panel.webview.postMessage({

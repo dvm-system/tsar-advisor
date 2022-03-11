@@ -64,7 +64,7 @@
             "type": "boolean",
             "default": false
           },
-          "tsar-advisor.advanced.analysisServer" : {
+          "tsar-advisor.advanced.analysisServer": {
             "description": "Analysis server which is used to analyze a project. Set path to the analysis server executable if it is not available in the PATH environment variable.",
             "type": "string",
             "default": "tsar-server"

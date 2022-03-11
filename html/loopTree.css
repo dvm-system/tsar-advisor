@@ -1,0 +1,34 @@
+#sort-button:hover {
+  color : #007bff !important;
+}
+
+#config-button:hover {
+  color : #007bff !important;
+}
+
+.orange {
+  color : orange !important;
+}
+
+.background_orange {
+  background-color : orange !important;
+}
+
+
+.black{
+  color : black !important;
+}
+
+.blue {
+  color : #007bff !important;
+}
+
+#conf_sort_asc{
+  font-size: 0.7rem;
+  height: 1.8rem;
+}
+
+#conf_sort_desc{
+  font-size: 0.7rem;
+  height: 1.8rem;
+}
