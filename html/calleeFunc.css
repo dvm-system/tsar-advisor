@@ -1,0 +1,37 @@
+.bg-grey {
+    background-color : rgba(223, 219, 219, 0.911) !important;
+  }
+
+.accordion {
+  height: calc(100% - 2rem);
+  max-height: calc(100vh - 2rem);
+  min-height: 350px;
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+  display: flex;
+  flex-flow: column nowrap;
+  border-bottom-left-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+}
+
+.accordion_border{
+  border-bottom: 1px solid lightgrey;
+}
+
+.accordion .card.show_1{
+  flex-grow: 1;
+  flex-shrink: 0;
+}
+
+.accordion .card.show{
+  flex-grow: 100;
+  flex-shrink: 1;
+}
+
+.collapsing {
+  transition: none !important;
+}
+
+.card{
+  border-bottom: 1px solid lightgrey;
+}

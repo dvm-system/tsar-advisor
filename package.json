@@ -112,7 +112,7 @@
       },
       {
         "command": "tsar.stop",
-        "title": "TSAR Close session",
+        "title": "TSAR Close",
         "icon": "icons/close.svg"
       },
       {

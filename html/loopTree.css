@@ -6,6 +6,20 @@
   color : #007bff !important;
 }
 
+.cst_link {
+  color : rgb(249, 163, 4) !important;
+  font-size: 1rem !important;
+  font-weight: bold;
+}
+
+.card-header {
+  padding-left: 0;
+}
+
+.cst_link:hover {
+  color : #007bffdc !important;
+}
+
 .orange {
   color : orange !important;
 }

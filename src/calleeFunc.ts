@@ -293,22 +293,88 @@ export class CalleeFuncProvider extends ProjectWebviewProvider {
           }
        }
     }
+
+
     return `
       <!doctype html>
       <html lang="en">
         ${headHtml(asWebvwieUri, {bootstrap: true, visNetwork: true})}
-        <body class="bg-light">
-          <div class="container-fluid pt-4" style="height:100%">
-            <h3>${this._title().replace('{0}', gotoTarget)}</h3>
-            <h5>${subtitle}</h5>
-            <p>A total number of callees is ${numberOfCallees}.</p>
-            <p>A total number of calls from user-defined functions is
-               ${numberOfCalls < 0 ? 'unknown' : numberOfCalls}.</p>
-            <div class="row" style="height:100%">
-              <div class="col-9" style="height:100%">
-                <div id="callGraph" style="height:90%"}></div>
+        <body class="bg-white">
+          <div class="container-fluid" style="height : 100%; width : 100%; min-width : 800px; min-height : 400px">
+            <div class="row" style="height : 100%;">
+              <div class="col-8 pt-2 pb-3 d-flex flex-column" style="height : 100%;">
+                <div>
+                  <h4>${this._title().replace('{0}', gotoTarget)}</h4>
+                  <h6>${subtitle}</h5>
+                </div>
+                <div id="callGraph" class="flex-fill bg-white" style="width : 100%; overflow-y : hidden; overflow-x : hidden; border : 1px solid lightgrey"></div>
               </div>
-              <div id="callInfo" class="col-3"></div>
+              <div class="col-4" class="bg-white">
+                <div class="accordion accordion_border mt-3 mb-3" id="callInfo">
+                  <div class="card show_1" id="callInfoCommon">
+                    <div class="card-header" id="callInfoCommonHeader">
+                      <h1 class="mb-0">
+                          <button class="btn btn-link btn-block text-left collapsed cst_link" type="button" data-toggle="collapse" data-target="#callInfoCommonCollapse" aria-expanded="true" aria-controls="callInfoCommonCollapse">
+                            Graph
+                          </button>
+                      </h1>
+                    </div>
+                    <div id="callInfoCommonCollapse" class="collapse show overflow-auto  " aria-labelledby="callInfoCommonHeader" >
+                      <div class="card-body p-0 m-0 " >
+                        <ul class="list-group list-group-flush" style="width : 100%">
+                          <li class="list-group-item">Total number of callees: <span class="blue">${numberOfCallees}</span></li>
+                          <li class="list-group-item">Total number of calls from UD functions: <span class="blue">
+                            ${numberOfCalls < 0 ? '--' : numberOfCalls}</span></li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="card d-none"  id="callInfoNode">
+                    <div class="card-header" id="callInfoNodeHeader">
+                      <h2 class="mb-0">
+                        <button class="btn btn-link btn-block text-left collapsed cst_link" type="button" data-toggle="collapse" data-target="#callInfoNodeCollapse" aria-expanded="false" aria-controls="callInfoNodeCollapse">
+                          Generate Configuration
+                        </button>
+                      </h2>
+                    </div>
+                    <div id="callInfoNodeCollapse" class="collapse overflow-auto " aria-labelledby="callInfoNodeHeader" >
+                      <div class="card-body p-0 m-0 overflow-auto ">
+                        callInfoNodeCollapse
+                      </div>
+                    </div>
+                  </div>
+                  <div class="card d-none" id="callInfoEdge">
+                    <div class="card-header" id="callInfoEdgeHeader">
+                      <h2 class="mb-0">
+                        <button class="btn btn-link btn-block text-left collapsed cst_link" type="button" data-toggle="collapse" data-target="#callInfoEdgeCollapse" aria-expanded="false" aria-controls="callInfoEdgeCollapse">
+                          ${log.CallGraph.callList}
+                        </button>
+                      </h2>
+                    </div>
+                    <div id="callInfoEdgeCollapse" class="collapse overflow-auto " aria-labelledby="callInfoEdgeHeader" >
+                      <div id="callInfoEdgeBody" class="card-body p-0 m-0 overflow-auto">
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <script>
+                  $('.collapsed').on('click', function(e){
+                    let el = [...document.querySelectorAll('.card.show'), ...document.querySelectorAll('.card.show_1')].filter(el => !el.classList.contains('d-none'))
+                    if (el.length <= 1 && e.target.ariaExpanded == 'true') e.stopPropagation();
+                  })
+                  $('.collapse').on('show.bs.collapse', function(){
+                    if ($(this).parents('.card').attr('id') == 'callInfoCommon'){
+                      $(this).parents('.card').addClass('show_1')
+                    } else {$(this).parents('.card').addClass('show')}
+
+                  })
+                  $('.collapse').on('hide.bs.collapse', function(){
+                    let el = document.getElementsByClassName('.show')
+                    $(this).parents('.card').removeClass('show')
+                    $(this).parents('.card').removeClass('show_1')
+                  })
+                </script>
+              </div>
             </div>
           </div>
           <script type="text/javascript">
@@ -320,6 +386,7 @@ export class CalleeFuncProvider extends ProjectWebviewProvider {
               edges: edges
             };
             var options = {
+              autoResize: false,
               edges:{
                 arrows: {
                   to: {
@@ -331,6 +398,13 @@ export class CalleeFuncProvider extends ProjectWebviewProvider {
             };
             var network = new vis.Network(container, data, options);
             const vscode = acquireVsCodeApi();
+            window.addEventListener('resize', function(event){
+              var container = document.getElementById('callGraph');
+              let w = container.clientWidth + 2 + 'px'
+              let h = container.clientHeight + 2 + 'px'
+              network.setSize(w,h)
+              network.redraw()
+            });
             network.on('doubleClick', selected => {
               if (!selected.nodes || selected.nodes.length == 0)
                 return;
@@ -338,34 +412,44 @@ export class CalleeFuncProvider extends ProjectWebviewProvider {
               vscode.postMessage({ command: 'goto', func: nodeID});
             });
             network.on('click', selected => {
-              const callInfo = document.getElementById('callInfo');
-              if (!selected.edges || selected.edges.length != 1 ||
-                  selected.nodes && selected.nodes.length > 0) {
-                callInfo.innerHTML = '';
+
+              if (!selected.nodes && !selected.edges){
+                $('#callInfoEdge').addClass('d-none')
+                $('#callInfoNode').addClass('d-none')
+                $('.accordion').addClass('accordion_border')
                 return;
               }
+
+              if (selected.nodes && selected.nodes.length > 0) {
+                $('#callInfoEdge').addClass('d-none')
+                $('#callInfoNode').removeClass('d-none')
+                if (!$('#callInfoNode').hasClass('show')) {$('#callInfoCommon').addClass('show_1');$('#callInfoCommonCollapse').addClass('show')}
+                $('.accordion').addClass('accordion_border')
+                return;
+              }
+
+              if (!selected.edges || selected.edges.length != 1) return;
               let e = edges.get(selected.edges[0]);
-              if (!e.location) {
-                callInfo.innerHTML = '';
-                return;
-              }
+              if (!e.location) return;
+              $('#callInfoEdge').removeClass('d-none')
+              $('#callInfoNode').addClass('d-none')
+              if (!$('#callInfoEdge').hasClass('show')) {$('#callInfoCommon').addClass('show_1'); $('#callInfoCommonCollapse').addClass('show') }
+              $('.accordion').removeClass('accordion_border')
+
               const from = nodes.get(e.from);
               const to = nodes.get(e.to);
-              let html = '<h6>${log.CallGraph.callList} from <var>' +
-                from.label + '</var> to <var>' + to.label + '</var></h6>' +
-                '<div class="mt-2 ml-2">';
-              html += '<ul class="list-unstyled">';
+              let html = '<ul class="list-group list-group-flush" style="width : 100%">'
+              html +=      '<li class="list-group-item">From  <span class="blue">' + from.label + '</span> to  <span class="blue">' + to.label + '</span></li>'
               for (let loc in e.location) {
-                html += '<li>';
-                html += '<a class="source-link" title="${log.Command.gotoCode}"' +
-                  'href="' + e.location[loc].Goto + '">';
-                html += e.location[loc].Filename + ':' +
-                  e.location[loc].Line + ':' + e.location[loc].Column;
-                html += '</a>';
-                html += '</li>';
+                html +=      '<li class="list-group-item">'
+                html +=         '<a class="source-link" title="${log.Command.gotoCode}" href="' + e.location[loc].Goto + '">'
+                html +=             e.location[loc].Filename + ':' + e.location[loc].Line + ':' + e.location[loc].Column
+                html +=         '</a>';
+                html +=      '</li>'
               }
-              html += '</ul></div>';
-              callInfo.innerHTML = html;
+              html +=    '</ul>'
+              $('#callInfoEdgeBody').html(html)
+              return;
             });
           </script>
         </body>
