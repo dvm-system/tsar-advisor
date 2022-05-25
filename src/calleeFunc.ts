@@ -35,6 +35,15 @@ interface Data {
   Complete: boolean,
   Functions: Map<number, msg.Function>,
   CallGraph: Map<msg.Function|msg.Loop, msg.CalleeFuncInfo[]>
+  Controll : {
+    type : 'node' | 'edge' | null,
+    id   : number | null,
+    show : {
+      common : boolean,
+      node : boolean,
+      edge : boolean
+    }
+  }
 }
 
 export class CalleeFuncProviderState extends ProjectWebviewProviderState<CalleeFuncProvider> {
@@ -57,6 +66,22 @@ export class CalleeFuncProviderState extends ProjectWebviewProviderState<CalleeF
     super.active = is;
   }
 
+  save_controll_func(data : any) {
+    (this._data as Data) = {
+      ...this._data,
+      Controll : {
+        id : data.id !== undefined ? data.id : this._data.Controll.id,
+        type : data.type !== undefined ? data.type : this._data.Controll.type,
+        show : data.show !== undefined ? {...this._data.Controll.show, ...data.show} : this._data.Controll.show
+      }
+    }
+    return;
+  }
+
+  get_controll_func() {
+    return (this._data as Data).Controll;
+  }
+
   onResponse(response: any, project: Project): Thenable<Data|undefined> {
     return new Promise(resolve => {
       if (response === undefined) {
@@ -76,7 +101,17 @@ export class CalleeFuncProviderState extends ProjectWebviewProviderState<CalleeF
           Target: undefined,
           Functions: functions,
           Complete: false,
-          CallGraph: undefined};
+          CallGraph: undefined,
+          Controll : {
+            id : null,
+            type : null,
+            show : {
+              common : true,
+              edge : false,
+              node : false,
+            },
+          }
+        };
         this._data = data;
         return resolve(undefined);
       }
@@ -93,7 +128,16 @@ export class CalleeFuncProviderState extends ProjectWebviewProviderState<CalleeF
             },
             Complete: false,
             Functions: undefined,
-            CallGraph: new Map<msg.Function|msg.Loop, msg.CalleeFuncInfo[]>()
+            CallGraph: new Map<msg.Function|msg.Loop, msg.CalleeFuncInfo[]>(),
+            Controll : {
+              id : null,
+              type : null,
+              show : {
+                common : true,
+                edge : false,
+                node : false,
+              },
+            }
           };
           this._data = data;
           vscode.commands.executeCommand('tsar.function.list', project.uri);
@@ -179,6 +223,7 @@ export class CalleeFuncProvider extends ProjectWebviewProvider {
     // must be a number represented as a string. The first symbol
     // for other identifiers must be '.'. For such objects Go To
     // command is not supported at this moment.
+
     panel.webview.onDidReceiveMessage(message => {
       switch(message.command) {
         case 'goto':
@@ -190,8 +235,25 @@ export class CalleeFuncProvider extends ProjectWebviewProvider {
               query: JSON.stringify(resolveLocation(project, f.StartLocation))
             }));
           break;
+          case 'save_controll' :
+            state.save_controll_func(message.data);
+          break;
       }
     }, null, state.disposables);
+
+
+    panel.onDidChangeViewState(e => {
+      const panel = e.webviewPanel;
+      if (!panel.visible)
+        return;
+      panel.webview.postMessage({
+        ...state.get_controll_func(),
+        command: 'restore_controll',
+      });
+    }, null, state.disposables);
+
+
+
     let targetFunc = info.Functions.get(info.Target.FuncID);
     let targetObj:msg.Function|msg.Loop = targetFunc;
     let gotoTarget = '';
@@ -294,7 +356,6 @@ export class CalleeFuncProvider extends ProjectWebviewProvider {
        }
     }
 
-
     return `
       <!doctype html>
       <html lang="en">
@@ -314,7 +375,7 @@ export class CalleeFuncProvider extends ProjectWebviewProvider {
                   <div class="card show_1" id="callInfoCommon">
                     <div class="card-header" id="callInfoCommonHeader">
                       <h1 class="mb-0">
-                          <button class="btn btn-link btn-block text-left collapsed cst_link" type="button" data-toggle="collapse" data-target="#callInfoCommonCollapse" aria-expanded="true" aria-controls="callInfoCommonCollapse">
+                          <button id="callButtonCommon" class="btn btn-link btn-block text-left collapsed cst_link" type="button" data-toggle="collapse" data-target="#callInfoCommonCollapse" aria-expanded="true" aria-controls="callInfoCommonCollapse">
                             Graph
                           </button>
                       </h1>
@@ -332,7 +393,7 @@ export class CalleeFuncProvider extends ProjectWebviewProvider {
                   <div class="card d-none"  id="callInfoNode">
                     <div class="card-header" id="callInfoNodeHeader">
                       <h2 class="mb-0">
-                        <button class="btn btn-link btn-block text-left collapsed cst_link" type="button" data-toggle="collapse" data-target="#callInfoNodeCollapse" aria-expanded="false" aria-controls="callInfoNodeCollapse">
+                        <button id="callButtonNode" class="btn btn-link btn-block text-left collapsed cst_link" type="button" data-toggle="collapse" data-target="#callInfoNodeCollapse" aria-expanded="false" aria-controls="callInfoNodeCollapse">
                           Generate Configuration
                         </button>
                       </h2>
@@ -346,7 +407,7 @@ export class CalleeFuncProvider extends ProjectWebviewProvider {
                   <div class="card d-none" id="callInfoEdge">
                     <div class="card-header" id="callInfoEdgeHeader">
                       <h2 class="mb-0">
-                        <button class="btn btn-link btn-block text-left collapsed cst_link" type="button" data-toggle="collapse" data-target="#callInfoEdgeCollapse" aria-expanded="false" aria-controls="callInfoEdgeCollapse">
+                        <button id="callButtonEdge" class="btn btn-link btn-block text-left collapsed cst_link" type="button" data-toggle="collapse" data-target="#callInfoEdgeCollapse" aria-expanded="false" aria-controls="callInfoEdgeCollapse">
                           ${log.CallGraph.callList}
                         </button>
                       </h2>
@@ -360,15 +421,29 @@ export class CalleeFuncProvider extends ProjectWebviewProvider {
                 <script>
                   $('.collapsed').on('click', function(e){
                     let el = [...document.querySelectorAll('.card.show'), ...document.querySelectorAll('.card.show_1')].filter(el => !el.classList.contains('d-none'))
+                    //console.log('Test',el, e.target.ariaExpanded)
                     if (el.length <= 1 && e.target.ariaExpanded == 'true') e.stopPropagation();
                   })
                   $('.collapse').on('show.bs.collapse', function(){
                     if ($(this).parents('.card').attr('id') == 'callInfoCommon'){
+                      vscode.postMessage({ command: 'save_controll', data: { show : {common : true} }});
+                    } else if ($(this).parents('.card').attr('id') == 'callInfoEdge') {
+                      vscode.postMessage({ command: 'save_controll', data: { show : {edge : true} }});
+                    } else {
+                      vscode.postMessage({ command: 'save_controll', data: { show : {node : true} }});
+                    }
+                    if ($(this).parents('.card').attr('id') == 'callInfoCommon'){
                       $(this).parents('.card').addClass('show_1')
                     } else {$(this).parents('.card').addClass('show')}
-
                   })
                   $('.collapse').on('hide.bs.collapse', function(){
+                    if ($(this).parents('.card').attr('id') == 'callInfoCommon'){
+                      vscode.postMessage({ command: 'save_controll', data: { show : {common : false} }});
+                    } else if ($(this).parents('.card').attr('id') == 'callInfoEdge') {
+                      vscode.postMessage({ command: 'save_controll', data: { show : {edge : false} }});
+                    } else {
+                      vscode.postMessage({ command: 'save_controll', data: { show : {node : false} }});
+                    }
                     let el = document.getElementsByClassName('.show')
                     $(this).parents('.card').removeClass('show')
                     $(this).parents('.card').removeClass('show_1')
@@ -378,6 +453,77 @@ export class CalleeFuncProvider extends ProjectWebviewProvider {
             </div>
           </div>
           <script type="text/javascript">
+
+            const vscode = acquireVsCodeApi();
+
+            window.addEventListener('message', event => {
+              const message = event.data;
+              switch (message.command) {
+                case "restore_controll":
+
+                    console.log('MESSAGE',message)
+
+                    if (message.type === null){
+                      $('#callInfoEdge').addClass('d-none')
+                      $('#callInfoEdgeCollapse').addClass('d-none')
+                      $('#callInfoNode').addClass('d-none')
+                      $('#callInfoNodeCollapse').addClass('d-none')
+                    }
+
+                    if (message.type === 'node'){
+                      $('#callInfoEdge').addClass('d-none')
+                      $('#callInfoEdgeCollapse').addClass('d-none')
+                      $('#callInfoNode').removeClass('d-none')
+                      $('#callInfoNodeCollapse').removeClass('d-none')
+                    }
+
+                    if (message.type === 'edge'){
+                      $('#callInfoEdge').removeClass('d-none')
+                      $('#callInfoEdgeCollapse').removeClass('d-none')
+                      $('#callInfoNode').addClass('d-none')
+                      $('#callInfoNodeCollapse').addClass('d-none')
+                    }
+
+                    if (message.show.common){
+                      $('#callInfoCommon').addClass('show_1');
+                      $('#callInfoCommonCollapse').addClass('show')
+                      $('#callButtonCommon').addClass('collapsed')
+                      $('#callButtonCommon').attr("aria-expanded","true");
+                    } else {
+                      $('#callInfoCommon').removeClass('show_1');
+                      $('#callInfoCommonCollapse').removeClass('show')
+                      $('#callButtonCommon').removeClass('collapsed')
+                      $('#callButtonCommon').attr("aria-expanded","false");
+                    }
+
+                    if (message.show.edge){
+                      $('#callInfoEdge').addClass('show');
+                      $('#callInfoEdgeCollapse').addClass('show')
+                      $('#callButtonEdge').addClass('collapsed')
+                      $('#callButtonEdge').attr("aria-expanded","true");
+                    } else {
+                      $('#callInfoEdge').removeClass('show_1');
+                      $('#callInfoEdgeCollapse').removeClass('show')
+                      $('#callButtonEdge').removeClass('collapsed')
+                      $('#callButtonEdge').attr("aria-expanded","false");
+                    }
+
+                    if (message.show.node){
+                      $('#callInfoNode').addClass('show');
+                      $('#callInfoNodeCollapse').addClass('show')
+                      $('#callButtonNode').addClass('collapsed')
+                      $('#callButtonNode').attr("aria-expanded","true");
+                    } else {
+                      $('#callInfoNode').removeClass('show_1');
+                      $('#callInfoNodeCollapse').removeClass('show')
+                      $('#callButtonNode').removeClass('collapsed')
+                      $('#callButtonNode').attr("aria-expanded","false");
+                    }
+
+                break;
+              }
+            });
+
             var nodes = new vis.DataSet([${nodes}]);
             var edges = new vis.DataSet([${edges}]);
             var container = document.getElementById('callGraph');
@@ -397,7 +543,7 @@ export class CalleeFuncProvider extends ProjectWebviewProvider {
               }
             };
             var network = new vis.Network(container, data, options);
-            const vscode = acquireVsCodeApi();
+
             window.addEventListener('resize', function(event){
               var container = document.getElementById('callGraph');
               let w = container.clientWidth + 2 + 'px'
@@ -425,12 +571,14 @@ export class CalleeFuncProvider extends ProjectWebviewProvider {
                 $('#callInfoNode').removeClass('d-none')
                 if (!$('#callInfoNode').hasClass('show')) {$('#callInfoCommon').addClass('show_1');$('#callInfoCommonCollapse').addClass('show')}
                 $('.accordion').addClass('accordion_border')
+                vscode.postMessage({ command: 'save_controll', data: { type : 'node', id : selected.nodes[0]}});
                 return;
               }
 
               if (!selected.edges || selected.edges.length != 1) return;
               let e = edges.get(selected.edges[0]);
               if (!e.location) return;
+              vscode.postMessage({ command: 'save_controll', data: { type : 'edge', id : selected.edges[0]}});
               $('#callInfoEdge').removeClass('d-none')
               $('#callInfoNode').addClass('d-none')
               if (!$('#callInfoEdge').hasClass('show')) {$('#callInfoCommon').addClass('show_1'); $('#callInfoCommonCollapse').addClass('show') }

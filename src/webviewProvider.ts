@@ -71,7 +71,7 @@ export class ProjectWebviewProviderState<ProviderT extends ProjectWebviewProvide
   get provider(): ProviderT { return this._provider; }
 
   /**
-   * Return webview panel, create a new one if it does not exist. 
+   * Return webview panel, create a new one if it does not exist.
    */
   get panel (): vscode.WebviewPanel {
     if (!this._hasPanel) {
@@ -111,6 +111,7 @@ export class ProjectWebviewProviderState<ProviderT extends ProjectWebviewProvide
 
 export abstract class ProjectWebviewProvider implements ProjectContentProvider{
   protected readonly _disposables: vscode.Disposable[] = [];
+  protected isUpdated = false
 
   protected _onDidAriseInternalError = new vscode.EventEmitter<Error>();
   readonly onDidAriseInternalError = this._onDidAriseInternalError.event;
@@ -130,28 +131,36 @@ export abstract class ProjectWebviewProvider implements ProjectContentProvider{
    * Update visible content for a specified project.
    */
   update(project: Project) {
+    if (this.isUpdated) return;
+    this.isUpdated = true
     let state = project.providerState(
       this.scheme()) as ProjectWebviewProviderState<ProjectWebviewProvider>;
     let content = this.provideContent(project);
     content.then(data => {
-      if (!state.active)
+      if (!state.active){
+        this.isUpdated = false
         return;
+      }
       let panel = state.panel;
       panel.title = `${log.Extension.displayName} | ${project.prjname}`;
       panel.webview.html = data;
       if (project.focus == state)
         panel.reveal();
+      this.isUpdated = false
     }, data => {
       this._onDidAriseInternalError.fire(new Error(data));
       vscode.window.showErrorMessage(log.Extension.displayName +
         `: ${project.prjname} ${data}`, 'Try to restart', 'Go to Project')
       .then(item => {
         if (item === 'Try to restart') {
+          this.isUpdated = false
           vscode.commands.executeCommand('tsar.stop', project.uri);
           vscode.commands.executeCommand('tsar.start', project.uri);
         }
-        else if (item == 'Go to Project')
+        else if (item == 'Go to Project'){
+          this.isUpdated = false
           vscode.commands.executeCommand('tsar.open-project', project.uri);
+        }
       });
     });
   }
