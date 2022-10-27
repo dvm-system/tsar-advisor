@@ -18,6 +18,9 @@ import {Project, ProjectEngine} from './project';
 import {ProjectWebviewProviderState,
   ProjectWebviewProvider} from './webviewProvider';
 
+import * as path from 'path'
+import * as fs from 'fs'
+
 export function registerCommands(engine: ProjectEngine, subscriptions: DisposableLikeList) {
   let showFuncList = vscode.commands.registerCommand('tsar.function.list',
     (uri:vscode.Uri) => {
@@ -57,6 +60,7 @@ interface Data {
     sort_type : SortType,
     sort_conf : "Yes" | 'No'
   }
+  store :  {}
 };
 
 export type SortKey = 'Parallel' | 'Canonical' | 'Perfect' | 'Exit' | 'IO' | 'Readonly' | 'UnsafeCFG' | 'NoSort'
@@ -149,7 +153,8 @@ export class LoopTreeProviderState extends ProjectWebviewProviderState<LoopTreeP
               sort_key : 'NoSort',
               sort_type : 'DESC',
               sort_conf : 'No'
-            }
+            },
+            store : {}
           };
         } else if (this._data != undefined) {
           // Add loop tree to the function representation.
@@ -170,6 +175,17 @@ export class LoopTreeProviderState extends ProjectWebviewProviderState<LoopTreeP
         ? (this._data as Data).FunctionList
         : undefined);
     });
+  }
+
+  public add_state_to_store(path: Array<string>, data : any){
+    let obj = (this._data as Data).store
+    for (const dir of path.slice(0,-1)){
+      if(!obj[dir]){
+        obj[dir] = {}
+      }
+      obj = obj[dir]
+    }
+    obj[path[path.length - 1]] = data
   }
 
   public setSortParam(key : SortKey = 'NoSort', type : SortType = 'DESC'){
@@ -324,6 +340,10 @@ export class LoopTreeProvider extends ProjectWebviewProvider {
             else
               $(id).collapse('show');
           break;
+          case 'store':
+            _debug_item.state.render(message.store)
+            _pure_function.state.render(message.store)
+          break;
           case 'Sort':
             //const test_text = document.getElementById('test_text')
             //test_text.style.color = 'red'
@@ -359,6 +379,7 @@ export class LoopTreeProvider extends ProjectWebviewProvider {
       });
     </script>`;
     body +=`
+    </div>
       <div class="row font-weight-bolder border-bottom py-3 text-center align-items-center">
         <div class="col-4 border-right">
           <div class = "d-flex justify-content-between align-items-center">
@@ -532,6 +553,7 @@ export class LoopTreeProvider extends ProjectWebviewProvider {
           ${gotoExpansionLocLink(project, func.StartLocation)}
           &minus;${gotoExpansionLocLink(project, func.EndLocation)}
           ${func.Exit !== null ? commandLink(linkCallees) : ''}
+          <div class="pure_function" id="${func.ID}"></div>
         </div>
         <div class="col-1">${this._checkTrait(func.Traits.Parallel)}</div>
         <div class="col-1"></div>
@@ -670,6 +692,14 @@ export class LoopTreeProvider extends ProjectWebviewProvider {
       body += '</div>'.repeat(currentLevel - 1);
       body += `</div>`;
     }
+    body += `
+      <script>
+        ${fs.readFileSync(path.resolve(__dirname, 'components', 'debug_item.js'),"utf8")}
+      </script>
+      <script>
+        ${fs.readFileSync(path.resolve(__dirname, 'components', 'pure_function.js'),"utf8")}
+      </script>
+    `
     body += `</body></html>`;
     return body;
   }
@@ -703,13 +733,18 @@ export class LoopTreeProvider extends ProjectWebviewProvider {
         case 'SetSortTypeDESC':
           state.setSortParam(message.key, message.type)
           break;
-
+        case 'store':
+          state.add_state_to_store(message.path, message.data)
       }
     }, null, state.disposables);
     panel.onDidChangeViewState(e => {
       const panel = e.webviewPanel;
       if (!panel.visible)
         return;
+      panel.webview.postMessage({
+        command: 'store',
+        store: (state.data as Data).store
+      })
       panel.webview.postMessage({
         command: 'Sort',
         open: (state.data as Data).Configuration.sort_conf,

@@ -14,6 +14,7 @@ import {waitHtml, UpdateUriFunc} from './functions';
 import * as log from './log';
 import {Project, ProjectContentProvider,
   ProjectContentProviderState} from './project';
+  import * as path from 'path';
 
 /**
  * State of a project content provider which uses Webview to visualize content.
@@ -88,7 +89,10 @@ export class ProjectWebviewProviderState<ProviderT extends ProjectWebviewProvide
         {
           enableCommandUris: true,
           enableScripts: true,
-         enableFindWidget: true,
+          enableFindWidget: true,
+          // localResourceRoots: [
+          //   vscode.Uri.file(path.resolve(__dirname, 'components')) // path.resolve(__dirname, 'style.css');
+          // ]
         }
       );
       this._panel.onDidDispose(() => {
