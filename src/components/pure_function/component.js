@@ -2,11 +2,21 @@ const _pure_function = function(id){
   //console.log('RENDER_DATA',_pure_function.state.data )
   if (_pure_function.state.data.check[id]){
     return( `
-      <button class="${_pure_function.state.class + '_' + id + '_button'} btn btn-primary btn-lg active"> P </button>
+      <button
+        class="${_pure_function.state.class + '_' + id + '_button'}  btn btn-outline-dark btn-sm active pure_func_button_on"
+        title="Unmark function as pure" data-toggle="tooltip" data-placement="bottom"
+      >
+        P
+      </button>
     `)
   } else {
     return( `
-      <button class="${_pure_function.state.class + '_' + id + '_button'} btn btn-secondary btn-lg active"> P </button>
+      <button
+        class="${_pure_function.state.class + '_' + id + '_button'} btn btn-outline-dark  btn-sm active pure_func_button_off"
+        title="Mark function as pure" data-toggle="tooltip" data-placement="bottom"
+      >
+        P
+      </button>
     `)
   }
 }
@@ -19,9 +29,8 @@ const _pure_function = function(id){
       check: {}
     },
     render : function(store = null){
-
+      //console.log('STORE-PFF',store)
       if(store && !(Object.keys(store).length === 0)){
-        console.log('STORE-PF',store)
         let data = store
         let check = false
         for (const dir of _pure_function.state.path){

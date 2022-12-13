@@ -18,8 +18,8 @@ import {Project, ProjectEngine} from './project';
 import {ProjectWebviewProviderState,
   ProjectWebviewProvider} from './webviewProvider';
 
-import * as path from 'path'
-import * as fs from 'fs'
+import * as PureFunction from './components/pure_function/index'
+import * as SaveStoreAsJSON from './components/save_store_as_json'
 
 export function registerCommands(engine: ProjectEngine, subscriptions: DisposableLikeList) {
   let showFuncList = vscode.commands.registerCommand('tsar.function.list',
@@ -177,16 +177,17 @@ export class LoopTreeProviderState extends ProjectWebviewProviderState<LoopTreeP
     });
   }
 
-  public add_state_to_store(path: Array<string>, data : any){
-    let obj = (this._data as Data).store
-    for (const dir of path.slice(0,-1)){
-      if(!obj[dir]){
-        obj[dir] = {}
-      }
-      obj = obj[dir]
-    }
-    obj[path[path.length - 1]] = data
-  }
+  // public add_state_to_store(path: Array<string>, data : any){
+  //   let obj = (this._data as Data).store
+  //   for (const dir of path.slice(0,-1)){
+  //     if(!obj[dir]){
+  //       obj[dir] = {}
+  //     }
+  //     obj = obj[dir]
+  //   }
+  //   obj[path[path.length - 1]] = data
+  // }
+
 
   public setSortParam(key : SortKey = 'NoSort', type : SortType = 'DESC'){
     if (key){
@@ -281,11 +282,20 @@ export class LoopTreeProvider extends ProjectWebviewProvider {
       response instanceof msg.LoopTree;
   }
 
-  protected _provideContent(project: Project, funclst: msg.FunctionList,
-      asWebviewUri: UpdateUriFunc): string {
+  protected _provideContent(
+    project: Project,
+    funclst: msg.FunctionList,
+    asWebviewUri: UpdateUriFunc
+  ): string {
+
     let state = project.providerState(
       LoopTreeProvider.scheme) as LoopTreeProviderState;
     this._registerListeners(project, state, funclst);
+
+      // Subcribe component
+      project.component_store.subscribe(PureFunction.id())
+      project.component_store.subscribe(SaveStoreAsJSON.id())
+
     let aliasTree = {
       command: 'tsar.loop.alias',
       project: project,
@@ -340,10 +350,7 @@ export class LoopTreeProvider extends ProjectWebviewProvider {
             else
               $(id).collapse('show');
           break;
-          case 'store':
-            _debug_item.state.render(message.store)
-            _pure_function.state.render(message.store)
-          break;
+          ${project.component_store.restore()}
           case 'Sort':
             //const test_text = document.getElementById('test_text')
             //test_text.style.color = 'red'
@@ -385,6 +392,7 @@ export class LoopTreeProvider extends ProjectWebviewProvider {
           <div class = "d-flex justify-content-between align-items-center">
             <div id="test_text"> Functions and Loops </div>
             <div class="btn-group ml-4" role="group" >
+             ${SaveStoreAsJSON.template('#1')}
               <button type="button" id="sort-button" class="btn btn-priamry  btn-sm " title="Sort items" data-toggle="tooltip" data-placement="bottom">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -524,7 +532,9 @@ export class LoopTreeProvider extends ProjectWebviewProvider {
       body += `
       <div class="row py-2 text-center border-bottom table-row
            ${func.Traits.Parallel == 'Yes' ? 'table-row-success' : ''}">
-        <div class="col-4 text-left border-right ">`;
+        <div class="col-4 text-left border-right funtions_loops_names">
+          <div class="funtions_loops_names_p1">
+      `;
       if (func.Traits.Loops == "Yes")
         if (!func.Loops.length) {
           body += commandLink({
@@ -553,7 +563,10 @@ export class LoopTreeProvider extends ProjectWebviewProvider {
           ${gotoExpansionLocLink(project, func.StartLocation)}
           &minus;${gotoExpansionLocLink(project, func.EndLocation)}
           ${func.Exit !== null ? commandLink(linkCallees) : ''}
-          <div class="pure_function" id="${func.ID}"></div>
+          </div>
+          <div class="funtions_loops_names_p1">
+            ${PureFunction.template(`${func.ID}`)}
+          </div>
         </div>
         <div class="col-1">${this._checkTrait(func.Traits.Parallel)}</div>
         <div class="col-1"></div>
@@ -692,14 +705,8 @@ export class LoopTreeProvider extends ProjectWebviewProvider {
       body += '</div>'.repeat(currentLevel - 1);
       body += `</div>`;
     }
-    body += `
-      <script>
-        ${fs.readFileSync(path.resolve(__dirname, 'components', 'debug_item.js'),"utf8")}
-      </script>
-      <script>
-        ${fs.readFileSync(path.resolve(__dirname, 'components', 'pure_function.js'),"utf8")}
-      </script>
-    `
+    body += PureFunction.script();
+    body += SaveStoreAsJSON.script();
     body += `</body></html>`;
     return body;
   }
@@ -734,17 +741,22 @@ export class LoopTreeProvider extends ProjectWebviewProvider {
           state.setSortParam(message.key, message.type)
           break;
         case 'store':
-          state.add_state_to_store(message.path, message.data)
+          project.component_store.add(message.path, message.data)
+          break;
+        case 'store_save_as_json':
+          console.log('time')
+          project.component_store.save_as_json_sync()
+          break;
+
       }
     }, null, state.disposables);
     panel.onDidChangeViewState(e => {
       const panel = e.webviewPanel;
       if (!panel.visible)
         return;
-      panel.webview.postMessage({
-        command: 'store',
-        store: (state.data as Data).store
-      })
+      //const msg = project.component_store.restore_command()
+      //console.log("MSG:::",msg)
+      panel.webview.postMessage(project.component_store.restore_command())
       panel.webview.postMessage({
         command: 'Sort',
         open: (state.data as Data).Configuration.sort_conf,

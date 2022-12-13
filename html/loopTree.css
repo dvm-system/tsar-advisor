@@ -46,3 +46,17 @@
   font-size: 0.7rem;
   height: 1.8rem;
 }
+
+.funtions_loops_names{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.funtions_loops_names_p1{
+  width : '80%'
+}
+
+.funtions_loops_names_p2{
+  width : '80%'
+}

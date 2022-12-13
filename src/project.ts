@@ -19,6 +19,8 @@ import * as log from './log';
 import * as msg from './messages';
 import {createInterface, Interface} from 'readline';
 import * as which from 'which';
+import * as component_store  from './components/store'
+
 
 type ToolT = {};
 
@@ -629,6 +631,8 @@ export class Project {
   private _disposable: vscode.Disposable;
   private _isDisposed = false;
   private _tool: ToolT;
+
+  public component_store = new component_store.Store
 
   public arguments: msg.Arguments;
 
