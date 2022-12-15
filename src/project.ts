@@ -632,7 +632,7 @@ export class Project {
   private _isDisposed = false;
   private _tool: ToolT;
 
-  public component_store = new component_store.Store
+  public component_store = new component_store.Store()
 
   public arguments: msg.Arguments;
 
@@ -703,7 +703,7 @@ export class Project {
   }
 
   /**
-   * Return state of content provider with a specified scheme.
+   * Return state of content provider with a specified sche me.
    *
    * The provider with a specified scheme must be at first registered in a
    * project with register() method.

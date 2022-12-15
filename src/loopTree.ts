@@ -52,7 +52,7 @@ interface Info {
   Function: msg.Function;
 };
 
-interface Data {
+export interface Data {
   FunctionList: msg.FunctionList;
   Info: Map<msg.Function|msg.Loop,Info>;
   Configuration: {
@@ -293,8 +293,8 @@ export class LoopTreeProvider extends ProjectWebviewProvider {
     this._registerListeners(project, state, funclst);
 
       // Subcribe component
-      project.component_store.subscribe(PureFunction.id())
-      project.component_store.subscribe(SaveStoreAsJSON.id())
+      project.component_store.subscribe(PureFunction.id(), LoopTreeProvider.scheme)
+      project.component_store.subscribe(SaveStoreAsJSON.id(), LoopTreeProvider.scheme)
 
     let aliasTree = {
       command: 'tsar.loop.alias',
@@ -744,8 +744,7 @@ export class LoopTreeProvider extends ProjectWebviewProvider {
           project.component_store.add(message.path, message.data)
           break;
         case 'store_save_as_json':
-          console.log('time')
-          project.component_store.save_as_json_sync()
+          project.component_store.save_as_json_sync_loop_tree(project, state.data as Data)
           break;
 
       }
@@ -756,7 +755,7 @@ export class LoopTreeProvider extends ProjectWebviewProvider {
         return;
       //const msg = project.component_store.restore_command()
       //console.log("MSG:::",msg)
-      panel.webview.postMessage(project.component_store.restore_command())
+      panel.webview.postMessage(project.component_store.restore_message())
       panel.webview.postMessage({
         command: 'Sort',
         open: (state.data as Data).Configuration.sort_conf,

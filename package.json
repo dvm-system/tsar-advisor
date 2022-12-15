@@ -189,11 +189,41 @@
         "command": "tsar.call.graph.unsafe",
         "title": "View Unsafe Control Flow",
         "icon": "icons/call-graph.svg"
+      },
+      {
+        "command": "tsar.function.mark_pure",
+        "title": "Mark Function AS Pure"
+      },
+      {
+        "command": "tsar.function.mark_not_pure",
+        "title": "Mark Function AS Not Pure"
+      },
+      {
+        "command": "tsar.function.unmark",
+        "title": "Unmark Function"
+      },
+      {
+        "command": "tsar.loopTree.update",
+        "title": "Update LoopTree"
       }
     ],
     "menus": {
       "view/item/context": [
         {
+          "command": "tsar.func.analyze",
+          "when": "view == tsar.loopTree && viewItem == function",
+          "group": "inline"
+        },
+        {
+          "command": "tsar.call.graph",
+          "when": "view == tsar.loopTree && viewItem == function",
+          "group": "inline"
+        },
+        {
+          "command": "tsar.function.mark_pure",
+          "when": "view == tsar.loopTree && viewItem == function"
+        },
+        {
           "command": "tsar.call.graph.io",
           "when": "view == tsar.loopTree && viewItem == function"
         },
@@ -206,6 +236,14 @@
           "when": "view == tsar.loopTree && viewItem == function"
         },
         {
+          "command": "tsar.function.mark_not_pure",
+          "when": "view == tsar.loopTree && viewItem == function"
+        },
+        {
+          "command": "tsar.function.unmark",
+          "when": "view == tsar.loopTree && viewItem == function"
+        },
+        {
           "command": "tsar.call.graph.io",
           "when": "view == tsar.loopTree && viewItem == loop"
         },
@@ -216,6 +254,16 @@
         {
           "command": "tsar.call.graph.unsafe",
           "when": "view == tsar.loopTree && viewItem == loop"
+        },
+        {
+          "command": "tsar.alias.tree",
+          "when": "view == tsar.loopTree && viewItem == loop",
+          "group": "inline"
+        },
+        {
+          "command": "tsar.call.graph",
+          "when": "view == tsar.loopTree && viewItem == loop",
+          "group": "inline"
         },
         {
           "command": "tsar.stop",
@@ -225,26 +273,6 @@
         {
           "command": "tsar.statistic",
           "when": "view == tsar.loopTree && viewItem == project",
-          "group": "inline"
-        },
-        {
-          "command": "tsar.func.analyze",
-          "when": "view == tsar.loopTree && viewItem == function",
-          "group": "inline"
-        },
-        {
-          "command": "tsar.alias.tree",
-          "when": "view == tsar.loopTree && viewItem == loop",
-          "group": "inline"
-        },
-        {
-          "command": "tsar.call.graph",
-          "when": "view == tsar.loopTree && viewItem == function",
-          "group": "inline"
-        },
-        {
-          "command": "tsar.call.graph",
-          "when": "view == tsar.loopTree && viewItem == loop",
           "group": "inline"
         }
       ],
