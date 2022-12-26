@@ -350,7 +350,7 @@ export class LoopTreeProvider extends ProjectWebviewProvider {
             else
               $(id).collapse('show');
           break;
-          ${project.component_store.restore()}
+          ${project.component_store.restore(LoopTreeProvider.scheme)}
           case 'Sort':
             //const test_text = document.getElementById('test_text')
             //test_text.style.color = 'red'

@@ -73,6 +73,7 @@ const _save_store_as_json = function(id){
         }
         for( let id of ids){
           for (let btn of document.getElementsByClassName(_save_store_as_json.state.class + '_' + id + '_button')){
+              btn.removeEventListener('click', _save_store_as_json.state.action(id))
               btn.addEventListener('click', _save_store_as_json.state.action(id))
           }
         }

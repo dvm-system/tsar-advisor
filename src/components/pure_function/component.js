@@ -45,7 +45,7 @@ const _pure_function = function(id){
     },
     render : function(store = null){
 
-      console.log('RENDER_PURE_FUNCTION_COMPONENT:::', store )
+      //console.log('RENDER_PURE_FUNCTION_COMPONENT:::', store )
 
       if(store && !(Object.keys(store).length === 0)){
         let data = store
@@ -67,6 +67,8 @@ const _pure_function = function(id){
         const ids = new Set()
 
         for (let item of document.getElementsByClassName(_pure_function.state.class)) {
+          if (!_pure_function.state.data.check)
+          _pure_function.state.data.check = {}
           if (!( item.id in _pure_function.state.data.check ))
             _pure_function.state.data.check[item.id] = 0
           item.innerHTML = _pure_function(item.id)
@@ -75,7 +77,8 @@ const _pure_function = function(id){
 
         for( let id of ids){
           for (let btn of document.getElementsByClassName(_pure_function.state.class + '_' + id + '_button')){
-              btn.addEventListener('click', _pure_function.state.action(id))
+            btn.removeEventListener('click', _pure_function.state.action(id))
+            btn.addEventListener('click', _pure_function.state.action(id))
           }
         }
 

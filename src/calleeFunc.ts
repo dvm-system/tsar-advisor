@@ -23,6 +23,8 @@ import * as msg from './messages';
 import {Project} from './project';
 import {ProjectWebviewProviderState,
   ProjectWebviewProvider} from './webviewProvider';
+import * as PureFunction from './components/pure_function_call_graph'
+
 
 interface Target {
   FuncID: number;
@@ -42,7 +44,8 @@ interface Data {
       common : boolean,
       node : boolean,
       edge : boolean
-    }
+    },
+    isUserFunc : boolean
   }
 }
 
@@ -72,7 +75,8 @@ export class CalleeFuncProviderState extends ProjectWebviewProviderState<CalleeF
       Controll : {
         id : data.id !== undefined ? data.id : this._data.Controll.id,
         type : data.type !== undefined ? data.type : this._data.Controll.type,
-        show : data.show !== undefined ? {...this._data.Controll.show, ...data.show} : this._data.Controll.show
+        show : data.show !== undefined ? {...this._data.Controll.show, ...data.show} : this._data.Controll.show,
+        isUserFunc : data.isUserFunc !== undefined ? data.isUserFunc : this._data.Controll.isUserFunc
       }
     }
     return;
@@ -110,6 +114,7 @@ export class CalleeFuncProviderState extends ProjectWebviewProviderState<CalleeF
               edge : false,
               node : false,
             },
+            isUserFunc : false
           }
         };
         this._data = data;
@@ -137,6 +142,7 @@ export class CalleeFuncProviderState extends ProjectWebviewProviderState<CalleeF
                 edge : false,
                 node : false,
               },
+              isUserFunc : false
             }
           };
           this._data = data;
@@ -238,6 +244,9 @@ export class CalleeFuncProvider extends ProjectWebviewProvider {
           case 'save_controll' :
             state.save_controll_func(message.data);
           break;
+          case 'store':
+            project.component_store.add(message.path, message.data)
+          break;
       }
     }, null, state.disposables);
 
@@ -246,6 +255,7 @@ export class CalleeFuncProvider extends ProjectWebviewProvider {
       const panel = e.webviewPanel;
       if (!panel.visible)
         return;
+      panel.webview.postMessage(project.component_store.restore_message())
       panel.webview.postMessage({
         ...state.get_controll_func(),
         command: 'restore_controll',
@@ -253,6 +263,7 @@ export class CalleeFuncProvider extends ProjectWebviewProvider {
     }, null, state.disposables);
 
 
+    project.component_store.subscribe(PureFunction.id(), CalleeFuncProvider.scheme)
 
     let targetFunc = info.Functions.get(info.Target.FuncID);
     let targetObj:msg.Function|msg.Loop = targetFunc;
@@ -393,14 +404,26 @@ export class CalleeFuncProvider extends ProjectWebviewProvider {
                   <div class="card d-none"  id="callInfoNode">
                     <div class="card-header" id="callInfoNodeHeader">
                       <h2 class="mb-0">
-                        <button id="callButtonNode" class="btn btn-link btn-block text-left collapsed cst_link" type="button" data-toggle="collapse" data-target="#callInfoNodeCollapse" aria-expanded="false" aria-controls="callInfoNodeCollapse">
+                        <button
+                          id="callButtonNode"
+                          class="btn btn-link btn-block text-left collapsed cst_link"
+                          type="button"
+                          data-toggle="collapse"
+                          data-target="#callInfoNodeCollapse"
+                          aria-expanded="false"
+                          aria-controls="callInfoNodeCollapse"
+                        >
                           Generate Configuration
                         </button>
                       </h2>
                     </div>
                     <div id="callInfoNodeCollapse" class="collapse overflow-auto " aria-labelledby="callInfoNodeHeader" >
                       <div class="card-body p-0 m-0 overflow-auto ">
-                        callInfoNodeCollapse
+                        <ul class="list-group list-group-flush" style="width : 100%">
+                          <li class="list-group-item">
+                            ${PureFunction.template('#active_pure_state')}
+                          </li>
+                        </ul>
                       </div>
                     </div>
                   </div>
@@ -459,22 +482,43 @@ export class CalleeFuncProvider extends ProjectWebviewProvider {
             window.addEventListener('message', event => {
               const message = event.data;
               switch (message.command) {
+                ${project.component_store.restore(CalleeFuncProvider.scheme)}
                 case "restore_controll":
 
-                    console.log('MESSAGE',message)
+                    //console.log('MESSAGE',message)
 
                     if (message.type === null){
                       $('#callInfoEdge').addClass('d-none')
                       $('#callInfoEdgeCollapse').addClass('d-none')
                       $('#callInfoNode').addClass('d-none')
                       $('#callInfoNodeCollapse').addClass('d-none')
+                      vscode.postMessage({
+                        command: 'store',
+                        path: ['json_generator', 'pure_function', 'call_graph', 'active_node'],
+                        data : {v : -1}
+                      })
                     }
 
                     if (message.type === 'node'){
                       $('#callInfoEdge').addClass('d-none')
                       $('#callInfoEdgeCollapse').addClass('d-none')
-                      $('#callInfoNode').removeClass('d-none')
-                      $('#callInfoNodeCollapse').removeClass('d-none')
+                      if (message.isUserFunc){
+                        $('#callInfoNode').removeClass('d-none')
+                        $('#callInfoNodeCollapse').removeClass('d-none')
+                        vscode.postMessage({
+                          command: 'store',
+                          path: ['json_generator', 'pure_function', 'call_graph', 'active_node'],
+                          data : {v : message.id || -1}
+                        })
+                      } else {
+                        $('#callInfoNode').addClass('d-none')
+                        $('#callInfoNodeCollapse').addClass('d-none')
+                        vscode.postMessage({
+                          command: 'store',
+                          path: ['json_generator', 'pure_function', 'call_graph', 'active_node'],
+                          data : {v : -1}
+                        })
+                      }
                     }
 
                     if (message.type === 'edge'){
@@ -482,6 +526,11 @@ export class CalleeFuncProvider extends ProjectWebviewProvider {
                       $('#callInfoEdgeCollapse').removeClass('d-none')
                       $('#callInfoNode').addClass('d-none')
                       $('#callInfoNodeCollapse').addClass('d-none')
+                      vscode.postMessage({
+                        command: 'store',
+                        path: ['json_generator', 'pure_function', 'call_graph', 'active_node'],
+                        data : {v : -1}
+                      })
                     }
 
                     if (message.show.common){
@@ -526,6 +575,18 @@ export class CalleeFuncProvider extends ProjectWebviewProvider {
 
             var nodes = new vis.DataSet([${nodes}]);
             var edges = new vis.DataSet([${edges}]);
+
+            const function_type = ${
+              JSON.stringify(
+                [...(state.data as Data).Functions.values()]
+                .reduce((prev, cur) => {
+                  return {...prev, [cur.ID] : cur.User}
+                }, {}),
+                null,
+                2
+              )
+            }
+
             var container = document.getElementById('callGraph');
             var data = {
               nodes: nodes,
@@ -542,6 +603,7 @@ export class CalleeFuncProvider extends ProjectWebviewProvider {
                 }
               }
             };
+
             var network = new vis.Network(container, data, options);
 
             window.addEventListener('resize', function(event){
@@ -551,12 +613,15 @@ export class CalleeFuncProvider extends ProjectWebviewProvider {
               network.setSize(w,h)
               network.redraw()
             });
+
             network.on('doubleClick', selected => {
               if (!selected.nodes || selected.nodes.length == 0)
                 return;
               let nodeID = selected.nodes[0];
               vscode.postMessage({ command: 'goto', func: nodeID});
             });
+
+
             network.on('click', selected => {
 
               if (!selected.nodes && !selected.edges){
@@ -567,15 +632,51 @@ export class CalleeFuncProvider extends ProjectWebviewProvider {
               }
 
               if (selected.nodes && selected.nodes.length > 0) {
+
+                $('#callInfoCommon').addClass('show_1');
+                $('#callInfoCommonCollapse').addClass('show')
+
                 $('#callInfoEdge').addClass('d-none')
-                $('#callInfoNode').removeClass('d-none')
-                if (!$('#callInfoNode').hasClass('show')) {$('#callInfoCommon').addClass('show_1');$('#callInfoCommonCollapse').addClass('show')}
+                $('#callInfoEdge').removeClass('show')
+
+                if (function_type[selected.nodes[0]]){
+                  $('#callInfoNode').removeClass('d-none')
+                  $('#callInfoNodeCollapse').removeClass('d-none')
+                  $('#callInfoNode').addClass('show');
+                  $('#callInfoNodeCollapse').addClass('show')
+                  $('#callButtonNode').addClass('collapsed')
+                  vscode.postMessage({
+                    command: 'store',
+                    path: ['json_generator', 'pure_function', 'call_graph', 'active_node'],
+                    data : {v : selected.nodes[0] || -1}
+                  })
+                  ${project.component_store.force_restore(CalleeFuncProvider.scheme)}
+                } else {
+                  $('#callInfoNode').removeClass('show')
+                  $('#callInfoNodeCollapse').removeClass('show')
+                  $('#callInfoNode').addClass('d-none');
+                  $('#callInfoNodeCollapse').addClass('d-none')
+                  $('#callButtonNode').removeClass('collapsed')
+                  vscode.postMessage({
+                    command: 'store',
+                    path: ['json_generator', 'pure_function', 'call_graph', 'active_node'],
+                    data : {v : -1}
+                  })
+                }
+
                 $('.accordion').addClass('accordion_border')
-                vscode.postMessage({ command: 'save_controll', data: { type : 'node', id : selected.nodes[0]}});
+                vscode.postMessage({ command: 'save_controll', data: { type : 'node', id : selected.nodes[0], show : {node : true}, isUserFunc : function_type[selected.nodes[0]] }});
                 return;
               }
 
               if (!selected.edges || selected.edges.length != 1) return;
+
+              vscode.postMessage({
+                command: 'store',
+                path: ['json_generator', 'pure_function', 'call_graph', 'active_node'],
+                data : {v : -1}
+              })
+
               let e = edges.get(selected.edges[0]);
               if (!e.location) return;
               vscode.postMessage({ command: 'save_controll', data: { type : 'edge', id : selected.edges[0]}});
@@ -600,6 +701,7 @@ export class CalleeFuncProvider extends ProjectWebviewProvider {
               return;
             });
           </script>
+          ${PureFunction.script()}
         </body>
       </html>`;
   }

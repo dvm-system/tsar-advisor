@@ -308,7 +308,8 @@ class SourceRegion extends vscode.TreeItem {
     loc += `${el.Line}:${el.Column}`;
     if (el.Line != el.MacroLine || el.Column != el.MacroColumn)
       loc += `(${el.MacroLine}:${el.MacroColumn})`;
-    let opt = options && options.pure == 0 ? null : `[${options.pure == 1 ? 'Pure' : 'NotPure'}]`
+      //console.log('DATAAAA',options,options.pure)
+    let opt = options && options.pure != undefined && options.pure != null && options.pure == 0 ? null : `[${options.pure == 1 ? 'Pure' : 'NotPure'}]`
     this.description =
       `${isFunction(this.object) ? "function" : 'loop'} at ${loc} ${opt ? opt : ''}`;
   }

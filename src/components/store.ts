@@ -43,6 +43,7 @@ export class Store {
   }
 
 	public add(path: Array<string>, data : any){
+
     let obj = this._data
     for (const dir of path.slice(0, -1)){
       if(!obj[dir]){
@@ -50,10 +51,72 @@ export class Store {
       }
       obj = obj[dir]
     }
-    //console.log('ADD:::', obj[path[path.length - 1]], JSON.parse(JSON.stringify(data)),{...obj[path[path.length - 1]], ...data} )
     obj[path[path.length - 1]] = {...obj[path[path.length - 1]], ...JSON.parse(JSON.stringify(data))};
+    console.log('add',path,data,this._data)
     if (path.includes('json_generator'))
-      vscode.commands.executeCommand('tsar.loopTree.update')
+      this.add_json_generator(path, data)
+  }
+
+  public check( path : Array<string>){
+    let obj = {...this._data}
+    let res = false
+    if (obj && path) res = true
+    for (const dir of path){
+      if(!obj[dir]){
+        res = false
+        break;
+      }
+      obj = obj[dir]
+    }
+    // if (res && !obj[path[path.length - 1]])
+    //   res = false
+    return res
+  }
+
+  public get( path : Array<string>){
+    let obj = {...this._data}
+    if (this.check(path)){
+      for (const dir of path){
+        obj = obj[dir]
+      }
+      return JSON.parse(JSON.stringify(obj))
+    } else return null
+  }
+
+  public add_json_generator(path: Array<string>, data : any){
+    console.log('ADD_JSON_GENERATOR ::: ', path)
+    if (path.includes('call_graph') && path.includes('active_node')){
+      if (
+        this._data['json_generator'] &&
+        this._data['json_generator']['pure_function'] &&
+        this._data['json_generator']['pure_function']['check'] &&
+        this._data['json_generator']['pure_function']['call_graph'] &&
+        this._data['json_generator']['pure_function']['call_graph']['active_node']['v'] &&
+        this._data['json_generator']['pure_function']['call_graph']['active_node']['v'] != -1
+      ){
+        console.log('ADD_JSON_GENERATOR_1 ::: ', this._data, data)
+        this._data['json_generator']['pure_function']['call_graph']['#active_pure_state'] =
+          this._data['json_generator']['pure_function']['check'][this._data['json_generator']['pure_function']['call_graph']['active_node']['v']]
+      }
+    }
+    if (path.includes('call_graph') && !path.includes('active_node') ){
+      if (
+        this._data['json_generator'] &&
+        this._data['json_generator']['pure_function'] &&
+        this._data['json_generator']['pure_function']['call_graph'] &&
+        this._data['json_generator']['pure_function']['call_graph']['active_node']['v'] &&
+        this._data['json_generator']['pure_function']['call_graph']['active_node']['v'] != -1 &&
+        data['#active_pure_state'] !== undefined
+      ){
+        console.log('ADD_JSON_GENERATOR_2 ::: ', this._data, data)
+        if (!this._data['json_generator']['pure_function']['check'])
+          this._data['json_generator']['pure_function']['check'] = {}
+        this._data['json_generator']['pure_function']['check'] = {
+          ...this._data['json_generator']['pure_function']['check'],
+          [+this._data['json_generator']['pure_function']['call_graph']['active_node']['v']] : data['#active_pure_state']}
+      }
+    }
+    vscode.commands.executeCommand('tsar.loopTree.update')
   }
 
 	public json_string(){
@@ -65,20 +128,23 @@ export class Store {
     return 'let _local_store = null'
   }
 
-  public restore(){
+  public restore(scheme : string, options : string = null){
     //console.log("RESTORE:::SUBSCRIBE:::",this._subscribe)
     return `case 'store':\n` +
-      this._subscribe.map(el => `_${el.id}.state.render(message.store)`).join('\n') +
-      (this._local_store ? `\n _local_store = message.store\n` : '') +
+      this._subscribe.filter(el => el.scheme == scheme).map(el => `_${el.id}.state.render(message.store${options ? `, ${options}` : '' })`).join('\n') +
       `\nbreak;`
   }
 
-  // public force_restore(){
-  //   return `<script>
-  //             ${this._subscribe.map(el => `_${el}.state.render(${JSON.stringify(this._data, null, 2)})`).join('\n')}
-  //           </script>
-  //           `
-  // }
+  public force_restore(scheme){
+    return `
+      ${
+        this._subscribe
+        .filter(el => el.scheme == scheme)
+        .map(el =>
+          `_${el.id}.state.render()`
+        )
+        .join('\n')}`
+  }
 
 
 
