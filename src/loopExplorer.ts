@@ -89,39 +89,39 @@ export class LoopTreeViewProvider
     vscode.commands.registerCommand(
       'tsar.function.mark_pure',
       (region: SourceRegion) => {
-        region.project.component_store.add(
-          ['json_generator', 'pure_function', 'check'],
-          {
-            [region.object.ID] : 1
-          }
-        )
-        region.project.component_store.restore_func(region.project)
+        // region.project.component_store.add(
+        //   ['json_generator', 'pure_function', 'check'],
+        //   {
+        //     [region.object.ID] : 1
+        //   }
+        // )
+        // region.project.component_store.restore_func(region.project)
         this.#onDidChangeTreeData.fire()
       }
     ),
     vscode.commands.registerCommand(
       'tsar.function.mark_not_pure',
       (region: SourceRegion) => {
-        region.project.component_store.add(
-          ['json_generator', 'pure_function', 'check'],
-          {
-            [region.object.ID] : 2
-          }
-        )
-        region.project.component_store.restore_func(region.project)
+        // region.project.component_store.add(
+        //   ['json_generator', 'pure_function', 'check'],
+        //   {
+        //     [region.object.ID] : 2
+        //   }
+        // )
+        // region.project.component_store.restore_func(region.project)
         this.#onDidChangeTreeData.fire()
       }
     ),
     vscode.commands.registerCommand(
       'tsar.function.unmark',
       (region: SourceRegion) => {
-        region.project.component_store.add(
-          ['json_generator', 'pure_function', 'check'],
-          {
-            [region.object.ID] : 0
-          }
-        )
-        region.project.component_store.restore_func(region.project)
+        // region.project.component_store.add(
+        //   ['json_generator', 'pure_function', 'check'],
+        //   {
+        //     [region.object.ID] : 0
+        //   }
+        // )
+        // region.project.component_store.restore_func(region.project)
         this.#onDidChangeTreeData.fire()
       }
     ),
@@ -184,7 +184,7 @@ export class LoopTreeViewProvider
       let loopTreeState = element.providerState(
       LoopTreeProvider.scheme) as LoopTreeProviderState;
 
-      const pure_functions_information = element.component_store.getPureFunctions();
+      const pure_functions_information = {} //element.component_store.getPureFunctions();
 
       let regions : SourceRegion [] = [];
       if (loopTreeState.functions() !== undefined)

@@ -6,7 +6,11 @@ import {guidGenerator} from '../Utils'
 
 export type Params = {
   id ?:  string,
+  path?: Array<string>,
+  data?: any
 }
+
+export const randomId = guidGenerator
 
 const paramsStore : {[id: string] : Params} = {}
 
@@ -14,22 +18,38 @@ export const template = (params : Params) => {
   const id_g = params.id || guidGenerator()
   paramsStore[id_g] = {
     id : id_g,
+    path : params.path ? [...params.path, id_g] : ['default', 'checkboxes', id_g],
+    data : params.data ? params.data : {}
   }
   return `<div
             class="${className()}"
             id="${id_g}"
           >
-            P_F TEMPLATE
+            CHECKBOX_TEMPLATE
           </div>`
 }
 
-export const className = () => {
-  return '__pure_function_call_graph'
+export const template_flat = (params : Params) => {
+  const id_g = params.id || guidGenerator()
+  paramsStore[id_g] = {
+    id : id_g,
+    path : params.path ? [...params.path, id_g] : ['default', 'checkbox', 'id'],
+    data : params.data ? params.data : {}
+  }
+  return `<div class="${className()}" id="${id_g}"> CHECKBOX_TEMPLATE </div>`
 }
 
-export const api_template = {
-  set_func : function(id : string, func_id : string){
-    return(`${className()}.state.api.set_func(${id}.id,${func_id})`)
+export const className = () => {
+  return '__checkbox'
+}
+
+export const render = (id: string, dynamic_id?) => {
+  return `${className()}.state.render(${id}, ${dynamic_id})`
+}
+
+export const template_api = {
+  get: (id:string) => {
+    return(`${className()}.state.api.get('${id}')`)
   }
 }
 
@@ -42,11 +62,7 @@ export const script = (store = null) => {
         .readFileSync(path.resolve(__dirname, 'script.js'),"utf8")
         .replace(/__component/gi, className())
         .replace(
-          /__params/gi, JSON.stringify(
-            Object.values(paramsStore).reduce((acc,cur) => {
-              return ({...acc, [cur.id] : {...cur}})
-            }, {})
-          )
+          /__params/gi, JSON.stringify(paramsStore)
         )
         .replace(/__init_store/gi, store ? JSON.stringify(store) : '{}')
       }

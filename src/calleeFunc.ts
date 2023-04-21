@@ -23,7 +23,9 @@ import * as msg from './messages';
 import {Project} from './project';
 import {ProjectWebviewProviderState,
   ProjectWebviewProvider} from './webviewProvider';
-import * as PureFunction from './components/pure_function_call_graph'
+
+import * as PureFunction from './components/pure_function_call_graph/index'
+import * as StoreToJSON from './components/store_to_json'
 
 
 interface Target {
@@ -86,6 +88,10 @@ export class CalleeFuncProviderState extends ProjectWebviewProviderState<CalleeF
     return (this._data as Data).Controll;
   }
 
+  get_data() {
+    return (this._data as Data)
+  }
+
   onResponse(response: any, project: Project): Thenable<Data|undefined> {
     return new Promise(resolve => {
       if (response === undefined) {
@@ -98,6 +104,7 @@ export class CalleeFuncProviderState extends ProjectWebviewProviderState<CalleeF
         // We receive a new list of functions, so dropout a constructed graph
         // because it may be out of data.
         this.active = false;
+        project.component_store.save(['global', 'function_list'], response.Functions)
         let functions = new Map<number, msg.Function>();
         for (let f of response.Functions)
           functions.set(f.ID, f);
@@ -230,6 +237,7 @@ export class CalleeFuncProvider extends ProjectWebviewProvider {
     // for other identifiers must be '.'. For such objects Go To
     // command is not supported at this moment.
 
+
     panel.webview.onDidReceiveMessage(message => {
       switch(message.command) {
         case 'goto':
@@ -240,13 +248,13 @@ export class CalleeFuncProvider extends ProjectWebviewProvider {
             project.uri.with({
               query: JSON.stringify(resolveLocation(project, f.StartLocation))
             }));
-          break;
+            break;
           case 'save_controll' :
             state.save_controll_func(message.data);
-          break;
-          case 'store':
-            project.component_store.add(message.path, message.data)
-          break;
+            break;
+          default:
+            project.component_store.script_save_into_global_store(message.command, message.path, message.data)
+            break;
       }
     }, null, state.disposables);
 
@@ -255,7 +263,7 @@ export class CalleeFuncProvider extends ProjectWebviewProvider {
       const panel = e.webviewPanel;
       if (!panel.visible)
         return;
-      panel.webview.postMessage(project.component_store.restore_message())
+      panel.webview.postMessage(project.component_store.script_restore_message())
       panel.webview.postMessage({
         ...state.get_controll_func(),
         command: 'restore_controll',
@@ -263,7 +271,7 @@ export class CalleeFuncProvider extends ProjectWebviewProvider {
     }, null, state.disposables);
 
 
-    project.component_store.subscribe(PureFunction.id(), CalleeFuncProvider.scheme)
+    //project.component_store.subscribe(PureFunction.id(), CalleeFuncProvider.scheme)
 
     let targetFunc = info.Functions.get(info.Target.FuncID);
     let targetObj:msg.Function|msg.Loop = targetFunc;
@@ -421,7 +429,7 @@ export class CalleeFuncProvider extends ProjectWebviewProvider {
                       <div class="card-body p-0 m-0 overflow-auto ">
                         <ul class="list-group list-group-flush" style="width : 100%">
                           <li class="list-group-item">
-                            ${PureFunction.template('#active_pure_state')}
+                            ${PureFunction.template({id : '_call_graph_pure_function'})}
                           </li>
                         </ul>
                       </div>
@@ -444,7 +452,6 @@ export class CalleeFuncProvider extends ProjectWebviewProvider {
                 <script>
                   $('.collapsed').on('click', function(e){
                     let el = [...document.querySelectorAll('.card.show'), ...document.querySelectorAll('.card.show_1')].filter(el => !el.classList.contains('d-none'))
-                    //console.log('Test',el, e.target.ariaExpanded)
                     if (el.length <= 1 && e.target.ariaExpanded == 'true') e.stopPropagation();
                   })
                   $('.collapse').on('show.bs.collapse', function(){
@@ -482,7 +489,11 @@ export class CalleeFuncProvider extends ProjectWebviewProvider {
             window.addEventListener('message', event => {
               const message = event.data;
               switch (message.command) {
-                ${project.component_store.restore(CalleeFuncProvider.scheme)}
+                ${
+                  project.component_store.script_load_from_global_store([
+                    PureFunction.className()
+                  ])
+                }
                 case "restore_controll":
 
                     //console.log('MESSAGE',message)
@@ -492,11 +503,7 @@ export class CalleeFuncProvider extends ProjectWebviewProvider {
                       $('#callInfoEdgeCollapse').addClass('d-none')
                       $('#callInfoNode').addClass('d-none')
                       $('#callInfoNodeCollapse').addClass('d-none')
-                      vscode.postMessage({
-                        command: 'store',
-                        path: ['json_generator', 'pure_function', 'call_graph', 'active_node'],
-                        data : {v : -1}
-                      })
+                      ${PureFunction.api_template.set_func('_call_graph_pure_function', ' -1')}
                     }
 
                     if (message.type === 'node'){
@@ -505,19 +512,11 @@ export class CalleeFuncProvider extends ProjectWebviewProvider {
                       if (message.isUserFunc){
                         $('#callInfoNode').removeClass('d-none')
                         $('#callInfoNodeCollapse').removeClass('d-none')
-                        vscode.postMessage({
-                          command: 'store',
-                          path: ['json_generator', 'pure_function', 'call_graph', 'active_node'],
-                          data : {v : message.id || -1}
-                        })
+                        ${PureFunction.api_template.set_func('_call_graph_pure_function', 'message.id || -1')}
                       } else {
                         $('#callInfoNode').addClass('d-none')
                         $('#callInfoNodeCollapse').addClass('d-none')
-                        vscode.postMessage({
-                          command: 'store',
-                          path: ['json_generator', 'pure_function', 'call_graph', 'active_node'],
-                          data : {v : -1}
-                        })
+                        ${PureFunction.api_template.set_func('_call_graph_pure_function', ' -1')}
                       }
                     }
 
@@ -526,11 +525,7 @@ export class CalleeFuncProvider extends ProjectWebviewProvider {
                       $('#callInfoEdgeCollapse').removeClass('d-none')
                       $('#callInfoNode').addClass('d-none')
                       $('#callInfoNodeCollapse').addClass('d-none')
-                      vscode.postMessage({
-                        command: 'store',
-                        path: ['json_generator', 'pure_function', 'call_graph', 'active_node'],
-                        data : {v : -1}
-                      })
+                      ${PureFunction.api_template.set_func('_call_graph_pure_function', '-1')}
                     }
 
                     if (message.show.common){
@@ -645,23 +640,14 @@ export class CalleeFuncProvider extends ProjectWebviewProvider {
                   $('#callInfoNode').addClass('show');
                   $('#callInfoNodeCollapse').addClass('show')
                   $('#callButtonNode').addClass('collapsed')
-                  vscode.postMessage({
-                    command: 'store',
-                    path: ['json_generator', 'pure_function', 'call_graph', 'active_node'],
-                    data : {v : selected.nodes[0] || -1}
-                  })
-                  ${project.component_store.force_restore(CalleeFuncProvider.scheme)}
+                  ${PureFunction.api_template.set_func('_call_graph_pure_function', 'selected.nodes[0] || -1')}
                 } else {
                   $('#callInfoNode').removeClass('show')
                   $('#callInfoNodeCollapse').removeClass('show')
                   $('#callInfoNode').addClass('d-none');
                   $('#callInfoNodeCollapse').addClass('d-none')
                   $('#callButtonNode').removeClass('collapsed')
-                  vscode.postMessage({
-                    command: 'store',
-                    path: ['json_generator', 'pure_function', 'call_graph', 'active_node'],
-                    data : {v : -1}
-                  })
+                  ${PureFunction.api_template.set_func('_call_graph_pure_function', '-1')}
                 }
 
                 $('.accordion').addClass('accordion_border')
@@ -671,11 +657,7 @@ export class CalleeFuncProvider extends ProjectWebviewProvider {
 
               if (!selected.edges || selected.edges.length != 1) return;
 
-              vscode.postMessage({
-                command: 'store',
-                path: ['json_generator', 'pure_function', 'call_graph', 'active_node'],
-                data : {v : -1}
-              })
+              ${PureFunction.api_template.set_func('_call_graph_pure_function', '-1')}
 
               let e = edges.get(selected.edges[0]);
               if (!e.location) return;
@@ -701,7 +683,8 @@ export class CalleeFuncProvider extends ProjectWebviewProvider {
               return;
             });
           </script>
-          ${PureFunction.script()}
+          ${PureFunction.script(project.component_store.get())}
+          ${PureFunction.style()}
         </body>
       </html>`;
   }

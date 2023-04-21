@@ -7,12 +7,12 @@ export const template = (id?:string) => {
             class="${className()}"
             id="${id || guidGenerator()}"
           >
-            P_F TEMPLATE
+            S_T_J TEMPLATE
           </div>`
 }
 
 export const className = () => {
-  return '__pure_function'
+  return '__store_to_json'
 }
 
 export const script = () => {

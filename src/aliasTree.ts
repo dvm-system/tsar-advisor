@@ -9,6 +9,9 @@ import * as msg from './messages';
 import {Project, ProjectEngine} from './project';
 import {ProjectWebviewProviderState,
   ProjectWebviewProvider} from './webviewProvider';
+import * as Checkbox from './components/Checkbox'
+import * as Select from './components/Select'
+import * as Input from './components/Input'
 
 export function registerCommands(engine: ProjectEngine, subscriptions: DisposableLikeList) {
   let showAliasTree = vscode.commands.registerCommand('tsar.loop.alias',
@@ -92,6 +95,8 @@ class AliasTreeProviderState extends ProjectWebviewProviderState<AliasTreeProvid
 }
 
 
+
+
 export class AliasTreeProvider extends ProjectWebviewProvider {
   static scheme = "tsar-aliastree";
 
@@ -107,6 +112,21 @@ export class AliasTreeProvider extends ProjectWebviewProvider {
     return response instanceof msg.AliasTree ||
       response instanceof msg.FunctionList;
   }
+
+  private _registerListeners(project: Project, state:AliasTreeProviderState) {
+    let panel = state.panel;
+    panel.webview.onDidReceiveMessage(message => {
+      switch(message.command) {
+        default:
+          project.component_store.script_save_into_global_store(message.command, message.path, message.data)
+          break;
+      }
+    }, null, state.disposables);
+    panel.onDidChangeViewState(e => {
+      panel.webview.postMessage(project.component_store.script_restore_message())
+    }, null, state.disposables);
+  }
+
 
   private _memoryInfo(project: Project, memory: msg.MemoryLocation [], separateTraits: {}) : [string, string[][]] {
     if (!memory)
@@ -192,8 +212,15 @@ export class AliasTreeProvider extends ProjectWebviewProvider {
 
   protected _provideContent(project: Project, data: Data,
       asWebviewUri: UpdateUriFunc): string {
+
+    let state = project.providerState(
+      AliasTreeProvider.scheme) as AliasTreeProviderState;
+
+    this._registerListeners(project, state);
+
     let nodes = '';
     let edges = '';
+    project.component_store.save(['global', 'vars'],data.AliasTree.Nodes)
     for (let n of data.AliasTree.Nodes) {
       let traits: any = {};
       let [selfLabel, selfDescription] = this._memoryInfo(project, n.SelfMemory, traits);
@@ -261,20 +288,61 @@ export class AliasTreeProvider extends ProjectWebviewProvider {
     }
     gotoTarget += `<var>${targetFunc.Name}</var> declared at ` +
       gotoExpansionLocLink(project, targetFunc.StartLocation);
-    return `
+
+    const html =`
       <!doctype html>
       <html lang="en">
         ${headHtml(asWebviewUri, {bootstrap: true, visNetwork: true})}
-        <body class="bg-light">
-          <div class="container-fluid pt-4" style="height:100%">
-            <h3>${this._title().replace('{0}', gotoTarget)}</h3>
-            <div class="row" style="height:100%">
-              <div class="col-9" style="height:100%">
-                <div id="aliasTree" style="height:90%"}></div>
+        <body class="bg-white">
+          <script>
+            const vscode = acquireVsCodeApi();
+            window.addEventListener('message', event => {
+              const message = event.data;
+              switch (message.command) {
+                ${
+                  project.component_store.script_load_from_store([
+                    Checkbox.className(),
+                    Select.className(),
+                    Input.className(),
+                  ])
+                }
+              }
+            });
+          </script>
+          <div class="container-fluid" style="height : 100%; width : 100%; min-width : 1050px; min-height : 400px">
+            <div class="row" style="height : 100%;">
+              <div class="col-8 pt-2 pb-3 d-flex flex-column" style="height : 100%;">
+                <div>
+                  <h4>${this._title().replace('{0}', gotoTarget)}</h4>
+                </div>
+                <div id="aliasTree" class="flex-fill bg-white" style="height:calc(100% - 36px); width : 100%; overflow-y : hidden; overflow-x : hidden; border : 1px solid lightgrey;"></div>
               </div>
-              <div class="col-3" style="height:90%">
-                <div id="memoryInfo" style="max-height:60%; overflow:scroll"></div>
-                <div id="traitInfo" class = "pt-2" style="max-height:40%; overflow:scroll"></div>
+              <div class="col-4" class="bg-white" style="min-width: 350px">
+                <div class="accordion mt-3 mb-3" style="border: 1px solid lightgrey; height: 100%;">
+                  <div id="memoryInfoContainer" style="height: calc(100% - 80px); border-bottom: 1px solid lightgrey; min-height: 133px">
+                    <div
+                      id="memoryInfoHeader"
+                      style="height: 40px;padding: 0.375rem 0.75rem; border-bottom: 1px solid lightgrey; color:black; background-color:rgba(0,0,0,0.03); font-size: 2.5rem; display:flex; flex-direction: column; justify-content: center; "
+                    >
+                    </div>
+                    <div style="overflow-y: scroll;height: calc(100% - 40px)" id="memoryInfo">
+                    <div style="height: 100%; width: 100%; display: flex; justify-content: center; align-items: center;"><h5 style="font-weight: 500!important;margin-bottom: 0; color: lightgrey">Please, select node</h5></div>
+                    </div>
+                  </div>
+                  <div id="traitInfoContainer" style="height: 40px; min-height: 40px; border-bottom: 1px solid lightgrey;">
+                    <div
+                      id="traitInfoHeader"
+                      style="height: 40px;padding: 0.375rem 0.75rem; border-bottom: 1px solid lightgrey; color:black; background-color:rgba(0,0,0,0.03); font-size: 2.5rem; display:flex; flex-direction: column; justify-content: center; "
+                    ></div>
+                    <div style="overflow-y: scroll;height: calc(100% - 40px)" id="traitInfo"></div>
+                  </div>
+                  <div id="confInfoContainer"  style="height: 40px; min-height: 40px; border-bottom: 1px solid lightgrey;">
+                  <div
+                    id="confInfoHeader"
+                    style="height: 40px;padding: 0.375rem 0.75rem; border-bottom: 1px solid lightgrey; color:black; background-color:rgba(0,0,0,0.03); font-size: 2.5rem; display:flex; flex-direction: column; justify-content: center; "
+                  ></div>
+                  <div style="overflow-y: scroll; height: calc(100% - 40px)" id="confInfo"></div>
+                </div>
               </div>
             </div>
           </div>
@@ -317,17 +385,41 @@ export class AliasTreeProvider extends ProjectWebviewProvider {
             var network = new vis.Network(container, data, options);
             network.on('click', selected => {
               const memoryInfo = document.getElementById('memoryInfo');
+              const memoryInfoHeader = document.getElementById('memoryInfoHeader');
+              const memoryInfoContainer =  document.getElementById('memoryInfoContainer');
               const traitInfo = document.getElementById('traitInfo');
+              const traitInfoHeader = document.getElementById('traitInfoHeader');
+              const traitInfoContainer =  document.getElementById('traitInfoContainer');
+              const confInfo = document.getElementById('confInfo');
+              const confInfoHeader = document.getElementById('confInfoHeader');
+              const confInfoContainer =  document.getElementById('confInfoContainer');
               memoryInfo.innerHTML = '';
-              //memoryInfo.classList.remove('border-bottom', 'border-secondary');
               traitInfo.innerHTML = '';
-              if (!selected.nodes || selected.nodes.length != 1)
+              traitInfoHeader.innerHTML = '';
+              confInfoHeader.innerHTML = '';
+              confInfoContainer.style.height = '40px'
+              confInfoContainer.style.minHeight  = '40px'
+              confInfoContainer.style.minWidth  = '310px'
+              traitInfoContainer.style.height = '40px'
+              confInfoContainer.style.minHeight  = '40px'
+              memoryInfoContainer.style.height = 'calc(100% - 80px)'
+              if (!selected.nodes || selected.nodes.length != 1){
+                memoryInfoHeader.innerHTML = ''
+                traitInfoHeader.innerHTML = '';
+                confInfoHeader.innerHTML = '';
+                confInfoContainer.style.height = '40px'
+                confInfoContainer.style.minHeight  = '40px'
+                traitInfoContainer.style.height = '40px'
+                confInfoContainer.style.minHeight  = '40px'
+                confInfoContainer.style.minWidth  = '310px'
+                memoryInfoContainer.style.height = 'calc(100% - 80px)'
+                const html = '<div style="height: 100%; width: 100%; display: flex; justify-content: center; align-items: center;"><h5 style="font-weight: 500!important;margin-bottom: 0; color: lightgrey">Please, select node</h5></div>'
+                memoryInfo.innerHTML = html
                 return;
+              }
               let n = nodes.get(selected.nodes[0]);
-              //memoryInfo.classList.add('border-bottom', 'border-secondary');
               if (n.self && n.self.length > 0) {
                 let html =
-                  '<h6>${log.AliasTree.nodeSelf}</h6>' +
                   '<div class="mt-2 ml-2">';
                 html += '<ul class="list-unstyled">';
                 for (let idx in n.self) {
@@ -345,13 +437,20 @@ export class AliasTreeProvider extends ProjectWebviewProvider {
                 }
                 html += '</ul></div>';
                 memoryInfo.innerHTML = html;
+                memoryInfoHeader.innerHTML = '<h6 style="font-weight: 700!important;margin-bottom: 0;">${log.AliasTree.nodeSelf}</h6>'
+                confInfoContainer.style.height = '40px'
+                confInfoContainer.style.minHeight  = '40px'
+                traitInfoContainer.style.height = '50%'
+                confInfoContainer.style.minHeight  = '133px'
+                confInfoContainer.style.minWidth  = '310px'
+                memoryInfoContainer.style.height = 'calc(50% - 40px)'
               }
               if (n.covered && n.covered.length > 0) {
                 let html = '';
                 if (n.kind === 'Top')
-                  html += '<h6>${log.AliasTree.nodeCovered}</h6>';
+                  memoryInfoHeader.innerHTML = '<h6 style="font-weight: 700!important;margin-bottom: 0;">${log.AliasTree.nodeCovered}</h6>'
                 else
-                  html += '<h6>${log.AliasTree.nodeOverlap}</h6>';
+                  memoryInfoHeader.innerHTML = '<h6 style="font-weight: 700!important;margin-bottom: 0;">${log.AliasTree.nodeOverlap}</h6>'
                 html += '<div class="mt-2 ml-2">';
                 html += '<ul class="list-unstyled">';
                 for (let idx in n.covered) {
@@ -372,7 +471,6 @@ export class AliasTreeProvider extends ProjectWebviewProvider {
               }
               if (n.kind !== 'Top' && n.traits) {
                 let html = '';
-                html += '<h6>${log.AliasTree.traisList}</h6>';
                 html += '<div class="mt-2 ml-2" style="overflow: scroll">';
                 html += '<ul class="list-unstyled">';
                 let empty = true;
@@ -405,12 +503,241 @@ export class AliasTreeProvider extends ProjectWebviewProvider {
                   html += '</li>';
                 }
                 html += '</ul></div>';
-                if (!empty)
-                  traitInfo.innerHTML += html;
+                let html_for_users_options = ''
+                const option_names = ['WriteOccured','ReadOccured','Private','UseAfterLoop','DefBeforeLoop','Reduction','Induction','Flow','Anti','Output']
+                const option_describe = [
+                  'The presence of write operations a variable in a loop;',
+                  'The presence of read operations from a variable in a loop;',
+                  "Indicates the fact that a value was written to a variable at the iteration of the loop before reading the value of the same variable at the same iteration of the loop;",
+                  "Indicates whether the variable is used for reading after exiting the loop;",
+                  "Indicates whether the variable is used for reading in the loop before assigning some value to it at the iteration of this loop;",
+                  "indicates the presence of a reduction operation on the given variable in the loop;",
+                  "Indicates that the variable is an inductive loop variable; Fr<From> - start index, To<To> - final index; St<Step> - index step",
+                  "Indicates the presence of a flow-dependence in the loop for this variable, requires an indication of the distance of the dependence;",
+                  "Indicates the presence of a anti-dependence in the loop for this variable, requires an indication of the distance of the dependence;",
+                  "Indicates the presence of a output-dependence in the loop for this variable, requires an indication of the distance of the dependence;",
+                ]
+                const option_component = [
+                  '${Checkbox.template_flat({
+                    id:'alias_tree_checkbox_write_ocured',
+                    path:['json_generator', 'alias_tree', 'write_occured'],
+                    data:{loop_id : data.AliasTree.LoopID}
+                  })}',
+                  '${Checkbox.template_flat({
+                    id:'alias_tree_checkbox_read_ocured',
+                    path:['json_generator', 'alias_tree', 'read_occured'],
+                    data:{loop_id : data.AliasTree.LoopID}
+                  })}',
+                  '${Checkbox.template_flat({
+                    id:'alias_tree_checkbox_private',
+                    path:['json_generator', 'alias_tree', 'private'],
+                    data:{loop_id : data.AliasTree.LoopID}
+                  })}',
+                  '${Checkbox.template_flat({
+                    id:'alias_tree_checkbox_use_after_loop',
+                    path:['json_generator', 'alias_tree', 'use_after_loop'],
+                    data:{loop_id : data.AliasTree.LoopID}
+                  })}',
+                  '${Checkbox.template_flat({
+                    id:'alias_tree_checkbox_def_before_loop',
+                    path:['json_generator', 'alias_tree', 'def_before_loop'],
+                    data:{loop_id : data.AliasTree.LoopID}
+                  })}',
+                  '<div style="display: flex; align-items:center; height:100%; flex-direction: row;">${Select.template_flat({
+                    id:'alias_tree_select_reduction',
+                    path:['json_generator', 'alias_tree', 'reduction'],
+                    values:['Add','Mult', 'Or', 'Add', 'Xor', 'Max', 'Min'],
+                    data:{loop_id : data.AliasTree.LoopID}
+                  })}${Checkbox.template_flat({
+                    id:'alias_tree_checkbox_reduction',
+                    path:['json_generator', 'alias_tree', 'reduction'],
+                    data:{loop_id : data.AliasTree.LoopID}
+                  })}</div>',
+                  '<div style="display: flex; align-items:center; height:100%; flex-direction: row;">${Input.template_flat({
+                    id:'alias_tree_input_induction_from',
+                    path:['json_generator', 'alias_tree', 'induction'],
+                    placeholder: 'Fr',
+                    type: 'text',
+                    style: {'width' : '47px', 'margin-right' : '10px'},
+                    data:{loop_id : data.AliasTree.LoopID}
+                  })}${Input.template_flat({
+                    id:'alias_tree_input_induction_to',
+                    path:['json_generator', 'alias_tree', 'induction'],
+                    placeholder: 'To',
+                    type: 'text',
+                    style: {'width' : '47px', 'margin-right' : '10px'},
+                    data:{loop_id : data.AliasTree.LoopID}
+                  })}${Input.template_flat({
+                    id:'alias_tree_input_induction_step',
+                    path:['json_generator', 'alias_tree', 'induction'],
+                    placeholder: 'St',
+                    type: 'text',
+                    style: {'width' : '47px', 'margin-right' : '10px'},
+                    data:{loop_id : data.AliasTree.LoopID}
+                  })}${Checkbox.template_flat({
+                    id:'alias_tree_checkbox_induction',
+                    path:['json_generator', 'alias_tree', 'induction'],
+                    data:{loop_id : data.AliasTree.LoopID}
+                  })}</div>',
+                  '<div style="display: flex; align-items:center; height:100%; flex-direction: row;">${Input.template_flat({
+                    id:'alias_tree_input_flow_max',
+                    path:['json_generator', 'alias_tree', 'flow'],
+                    placeholder: 'Max',
+                    type: 'text',
+                    style: {'width' : '70px', 'margin-right' : '10px'},
+                    data:{loop_id : data.AliasTree.LoopID}
+                  })}${Input.template_flat({
+                    id:'alias_tree_input_flow_min',
+                    path:['json_generator', 'alias_tree', 'flow'],
+                    placeholder: 'Min',
+                    type: 'text',
+                    style: {'width' : '70px', 'margin-right' : '10px'},
+                    data:{loop_id : data.AliasTree.LoopID}
+                  })}${Checkbox.template_flat({
+                    id:'alias_tree_checkbox_flow',
+                    path:['json_generator', 'alias_tree', 'flow'],
+                    data:{loop_id : data.AliasTree.LoopID}
+                  })}</div>',
+                  '<div style="display: flex; align-items:center; height:100%; flex-direction: row;">${Input.template_flat({
+                    id:'alias_tree_input_anti_max',
+                    path:['json_generator', 'alias_tree', 'anti'],
+                    placeholder: 'Max',
+                    type: 'text',
+                    style: {'width' : '70px', 'margin-right' : '10px'},
+                    data:{loop_id : data.AliasTree.LoopID}
+                  })}${Input.template_flat({
+                    id:'alias_tree_input_anti_min',
+                    path:['json_generator', 'alias_tree', 'anti'],
+                    placeholder: 'Min',
+                    type: 'text',
+                    style: {'width' : '70px', 'margin-right' : '10px'},
+                    data:{loop_id : data.AliasTree.LoopID}
+                  })}${Checkbox.template_flat({
+                    id:'alias_tree_checkbox_anti',
+                    path:['json_generator', 'alias_tree', 'anti'],
+                    data:{loop_id : data.AliasTree.LoopID}
+                  })}</div>',
+                  '<div style="display: flex; align-items:center; height:100%; flex-direction: row;">${Input.template_flat({
+                    id:'alias_tree_input_output_max',
+                    path:['json_generator', 'alias_tree', 'output'],
+                    placeholder: 'Max',
+                    type: 'text',
+                    style: {'width' : '70px', 'margin-right' : '10px'},
+                    data:{loop_id : data.AliasTree.LoopID}
+                  })}${Input.template_flat({
+                    id:'alias_tree_input_output_min',
+                    path:['json_generator', 'alias_tree', 'output'],
+                    placeholder: 'Min',
+                    type: 'text',
+                    style: {'width' : '70px', 'margin-right' : '10px'},
+                    data:{loop_id : data.AliasTree.LoopID}
+                  })}${Checkbox.template_flat({
+                    id:'alias_tree_checkbox_output',
+                    path:['json_generator', 'alias_tree', 'output'],
+                    data:{loop_id : data.AliasTree.LoopID}
+                  })}</div>'
+                ]
+                html_for_users_options += '<ul class="list-group">'
+                for (let i = 0; i < option_names.length; i++){
+                  html_for_users_options +=   '<li class="list-group-item" style="padding: 0rem 0rem;">'
+                  html_for_users_options +=     '<div style="width: 100%; height: 45px; align-items:center;  display:flex; flex-direction: row; justify-content: start;">'
+                  html_for_users_options +=       '<div style="width: 30px; text-align: center; font-size: 18px;">'
+                  html_for_users_options +=         '<span style="cursor:pointer" title="' + (option_describe[i] || "") + '">&#9741</span>';
+                  html_for_users_options +=       '</div>'
+                  html_for_users_options +=       '<div>'
+                  html_for_users_options +=         option_names[i]  || 'Name'
+                  html_for_users_options +=       '</div>'
+                  html_for_users_options +=       '<div style="display: flex; align-items:center; height:100%; flex-direction: row;justify-content: end; padding-right: 10px;flex-grow: 1;">'
+                  html_for_users_options +=         option_component[i]  || 'Component'
+                  html_for_users_options +=       '</div>'
+                  html_for_users_options +=     '</div>'
+                  html_for_users_options +=   '</li>'
+                }
+                html_for_users_options += '</ul>'
+
+                  traitInfo.innerHTML = html;
+                  confInfo.innerHTML = html_for_users_options
+                  traitInfoHeader.innerHTML = '<h6 style="font-weight: 700!important;margin-bottom: 0;">${log.AliasTree.traisList}</h6>';
+                  confInfoHeader.innerHTML = '<h6 style="font-weight: 700!important;margin-bottom: 0;">Users Options</h6>';
+                  confInfoContainer.style.height = '30%'
+                  confInfoContainer.style.minHeight  = '133px'
+                  traitInfoContainer.style.height = '40%'
+                  confInfoContainer.style.minHeight  = '133px'
+                  confInfoContainer.style.minWidth  = '310px'
+                  memoryInfoContainer.style.height = '30%'
+
+                  ${Checkbox.render(null, 'n.id')}
+                  ${Select.render(null, 'n.id')}
+                  ${Input.render(null, 'n.id')}
+                  document.getElementById('alias_tree_checkbox_reduction').addEventListener('click', (e)=>{
+                    e.stopPropagation()
+                    const s = ${Checkbox.template_api.get('alias_tree_checkbox_reduction')}
+                    if (s){
+                      ${Select.template_api.enable('alias_tree_select_reduction')}
+                    } else {
+                      ${Select.template_api.disable('alias_tree_select_reduction')}
+                    }
+                  })
+                  document.getElementById('alias_tree_checkbox_flow').addEventListener('click', (e)=>{
+                    e.stopPropagation()
+                    const s = ${Checkbox.template_api.get('alias_tree_checkbox_flow')}
+                    if (s){
+                      ${Input.template_api.enable('alias_tree_input_flow_max')}
+                      ${Input.template_api.enable('alias_tree_input_flow_min')}
+                    } else {
+                      ${Input.template_api.disable('alias_tree_input_flow_max')}
+                      ${Input.template_api.disable('alias_tree_input_flow_min')}
+                    }
+                  })
+                  document.getElementById('alias_tree_checkbox_anti').addEventListener('click', (e)=>{
+                    e.stopPropagation()
+                    const s = ${Checkbox.template_api.get('alias_tree_checkbox_anti')}
+                    if (s){
+                      ${Input.template_api.enable('alias_tree_input_anti_max')}
+                      ${Input.template_api.enable('alias_tree_input_anti_min')}
+                    } else {
+                      ${Input.template_api.disable('alias_tree_input_anti_max')}
+                      ${Input.template_api.disable('alias_tree_input_anti_min')}
+                    }
+                  })
+                  document.getElementById('alias_tree_checkbox_output').addEventListener('click', (e)=>{
+                    e.stopPropagation()
+                    const s = ${Checkbox.template_api.get('alias_tree_checkbox_output')}
+                    if (s){
+                      ${Input.template_api.enable('alias_tree_input_output_max')}
+                      ${Input.template_api.enable('alias_tree_input_output_min')}
+                    } else {
+                      ${Input.template_api.disable('alias_tree_input_output_max')}
+                      ${Input.template_api.disable('alias_tree_input_output_min')}
+                    }
+                  })
+                  document.getElementById('alias_tree_checkbox_induction').addEventListener('click', (e)=>{
+                    e.stopPropagation()
+                    const s = ${Checkbox.template_api.get('alias_tree_checkbox_induction')}
+                    if (s){
+                      ${Input.template_api.enable('alias_tree_input_induction_from')}
+                      ${Input.template_api.enable('alias_tree_input_induction_to')}
+                      ${Input.template_api.enable('alias_tree_input_induction_step')}
+                    } else {
+                      ${Input.template_api.disable('alias_tree_input_induction_from')}
+                      ${Input.template_api.disable('alias_tree_input_induction_to')}
+                      ${Input.template_api.disable('alias_tree_input_induction_step')}
+                    }
+                  })
+
+
               }
             });
           </script>
+          ${Checkbox.script()}
+          ${Checkbox.style()}
+          ${Select.script()}
+          ${Select.style()}
+          ${Input.script()}
+          ${Input.style()}
         </body>
       </html>`;
+      // console.log('SSS', html)
+    return html
   }
 }

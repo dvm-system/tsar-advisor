@@ -19,7 +19,7 @@ import {ProjectWebviewProviderState,
   ProjectWebviewProvider} from './webviewProvider';
 
 import * as PureFunction from './components/pure_function/index'
-import * as SaveStoreAsJSON from './components/save_store_as_json'
+import * as StoreToJSON from './components/store_to_json'
 
 export function registerCommands(engine: ProjectEngine, subscriptions: DisposableLikeList) {
   let showFuncList = vscode.commands.registerCommand('tsar.function.list',
@@ -146,6 +146,7 @@ export class LoopTreeProviderState extends ProjectWebviewProviderState<LoopTreeP
     return new Promise(resolve => {
       if (response !== undefined) {
         if (response instanceof msg.FunctionList) {
+
           this._data = {
             FunctionList: response,
             Info: new Map<any, Info>(),
@@ -291,10 +292,11 @@ export class LoopTreeProvider extends ProjectWebviewProvider {
     let state = project.providerState(
       LoopTreeProvider.scheme) as LoopTreeProviderState;
     this._registerListeners(project, state, funclst);
+    project.component_store.save(['global', 'function_list'], funclst.Functions)
 
       // Subcribe component
-      project.component_store.subscribe(PureFunction.id(), LoopTreeProvider.scheme)
-      project.component_store.subscribe(SaveStoreAsJSON.id(), LoopTreeProvider.scheme)
+      // project.component_store.subscribe(PureFunction.id(), LoopTreeProvider.scheme)
+      // project.component_store.subscribe(SaveStoreAsJSON.id(), LoopTreeProvider.scheme)
 
     let aliasTree = {
       command: 'tsar.loop.alias',
@@ -350,7 +352,12 @@ export class LoopTreeProvider extends ProjectWebviewProvider {
             else
               $(id).collapse('show');
           break;
-          ${project.component_store.restore(LoopTreeProvider.scheme)}
+          ${
+            project.component_store.script_load_from_global_store([
+              PureFunction.className(),
+              StoreToJSON.className()
+            ])
+          }
           case 'Sort':
             //const test_text = document.getElementById('test_text')
             //test_text.style.color = 'red'
@@ -392,7 +399,7 @@ export class LoopTreeProvider extends ProjectWebviewProvider {
           <div class = "d-flex justify-content-between align-items-center">
             <div id="test_text"> Functions and Loops </div>
             <div class="btn-group ml-4" role="group" >
-             ${SaveStoreAsJSON.template('#1')}
+             ${StoreToJSON.template()}
               <button type="button" id="sort-button" class="btn btn-priamry  btn-sm " title="Sort items" data-toggle="tooltip" data-placement="bottom">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -705,14 +712,17 @@ export class LoopTreeProvider extends ProjectWebviewProvider {
       body += '</div>'.repeat(currentLevel - 1);
       body += `</div>`;
     }
+    body += PureFunction.style();
     body += PureFunction.script();
-    body += SaveStoreAsJSON.script();
+    body += StoreToJSON.style();
+    body += StoreToJSON.script();
     body += `</body></html>`;
     return body;
   }
 
   private _registerListeners(project: Project, state: LoopTreeProviderState, funclst: msg.FunctionList) {
     let panel = state.panel;
+    project.component_store.save(['global', 'function_list'], funclst.Functions)
     panel.webview.onDidReceiveMessage(message => {
       switch(message.command) {
         case 'Subtree':
@@ -740,22 +750,16 @@ export class LoopTreeProvider extends ProjectWebviewProvider {
         case 'SetSortTypeDESC':
           state.setSortParam(message.key, message.type)
           break;
-        case 'store':
-          project.component_store.add(message.path, message.data)
+        default:
+          project.component_store.script_save_into_global_store(message.command, message.path, message.data)
           break;
-        case 'store_save_as_json':
-          project.component_store.save_as_json_sync_loop_tree(project, state.data as Data)
-          break;
-
       }
     }, null, state.disposables);
     panel.onDidChangeViewState(e => {
       const panel = e.webviewPanel;
       if (!panel.visible)
         return;
-      //const msg = project.component_store.restore_command()
-      //console.log("MSG:::",msg)
-      panel.webview.postMessage(project.component_store.restore_message())
+      panel.webview.postMessage(project.component_store.script_restore_message())
       panel.webview.postMessage({
         command: 'Sort',
         open: (state.data as Data).Configuration.sort_conf,
