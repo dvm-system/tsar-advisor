@@ -9,6 +9,7 @@ html, body { height: 100%; }
   color: burlywood;
 }
 
+
 .table-row:hover {
   background-color: var(--light);
 }

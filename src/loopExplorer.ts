@@ -86,6 +86,49 @@ export class LoopTreeViewProvider
       'tsar.call.graph.unsafe',
       (region: SourceRegion) => this.buildCallGraph(region,
         msg.StatementAttr.UnsafeCFG));
+    vscode.commands.registerCommand(
+      'tsar.function.mark_pure',
+      (region: SourceRegion) => {
+        // region.project.component_store.add(
+        //   ['json_generator', 'pure_function', 'check'],
+        //   {
+        //     [region.object.ID] : 1
+        //   }
+        // )
+        // region.project.component_store.restore_func(region.project)
+        this.#onDidChangeTreeData.fire()
+      }
+    ),
+    vscode.commands.registerCommand(
+      'tsar.function.mark_not_pure',
+      (region: SourceRegion) => {
+        // region.project.component_store.add(
+        //   ['json_generator', 'pure_function', 'check'],
+        //   {
+        //     [region.object.ID] : 2
+        //   }
+        // )
+        // region.project.component_store.restore_func(region.project)
+        this.#onDidChangeTreeData.fire()
+      }
+    ),
+    vscode.commands.registerCommand(
+      'tsar.function.unmark',
+      (region: SourceRegion) => {
+        // region.project.component_store.add(
+        //   ['json_generator', 'pure_function', 'check'],
+        //   {
+        //     [region.object.ID] : 0
+        //   }
+        // )
+        // region.project.component_store.restore_func(region.project)
+        this.#onDidChangeTreeData.fire()
+      }
+    ),
+    vscode.commands.registerCommand(
+      'tsar.loopTree.update',
+      () => this.#onDidChangeTreeData.fire()
+    )
   }
 
   state(): LoopTreeViewProviderState {
@@ -139,7 +182,10 @@ export class LoopTreeViewProvider
     }
     if (!this._isSourceRegion(element)) {
       let loopTreeState = element.providerState(
-        LoopTreeProvider.scheme) as LoopTreeProviderState;
+      LoopTreeProvider.scheme) as LoopTreeProviderState;
+
+      const pure_functions_information = {} //element.component_store.getPureFunctions();
+
       let regions : SourceRegion [] = [];
       if (loopTreeState.functions() !== undefined)
         for (let func of loopTreeState.functions()) {
@@ -148,7 +194,7 @@ export class LoopTreeViewProvider
           let item = new SourceRegion(func, func, element,
             func.Traits.Loops === "Yes"
               ? vscode.TreeItemCollapsibleState.Collapsed
-              : vscode.TreeItemCollapsibleState.None);
+              : vscode.TreeItemCollapsibleState.None, {pure : pure_functions_information[func.ID] || 0 });
           item.command = {
             command: "tsar.loopTree.goto",
             title: "",
@@ -190,7 +236,7 @@ export class LoopTreeViewProvider
           idx + 1 < element.root.Loops.length &&
           element.root.Loops[idx+1].Level == loop.Level + 1
           ? vscode.TreeItemCollapsibleState.Collapsed
-          : vscode.TreeItemCollapsibleState.None);
+          : vscode.TreeItemCollapsibleState.None, null);
       item.command = {
         command: "tsar.loopTree.goto", title: "", arguments: [item]
       };
@@ -243,7 +289,11 @@ class SourceRegion extends vscode.TreeItem {
       public readonly object: msg.Function|msg.Loop,
       public readonly root: msg.Function,
       public readonly project: Project,
-      public readonly collapsibleState: vscode.TreeItemCollapsibleState) {
+      public readonly collapsibleState: vscode.TreeItemCollapsibleState,
+      public readonly options: {
+        pure : 0 | 1 | 2
+      }
+  ) {
     super(isFunction(object) ? object.Name
                              : object.Type.toLowerCase(), collapsibleState);
     this.tooltip =
@@ -258,7 +308,9 @@ class SourceRegion extends vscode.TreeItem {
     loc += `${el.Line}:${el.Column}`;
     if (el.Line != el.MacroLine || el.Column != el.MacroColumn)
       loc += `(${el.MacroLine}:${el.MacroColumn})`;
+      //console.log('DATAAAA',options,options.pure)
+    let opt = options && options.pure != undefined && options.pure != null && options.pure == 0 ? null : `[${options.pure == 1 ? 'Pure' : 'NotPure'}]`
     this.description =
-      `${isFunction(this.object) ? "function" : 'loop'} at ${loc}`;
+      `${isFunction(this.object) ? "function" : 'loop'} at ${loc} ${opt ? opt : ''}`;
   }
 }

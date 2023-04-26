@@ -19,6 +19,8 @@ import * as log from './log';
 import * as msg from './messages';
 import {createInterface, Interface} from 'readline';
 import * as which from 'which';
+import * as component_store  from './components/Store'
+
 
 type ToolT = {};
 
@@ -630,6 +632,8 @@ export class Project {
   private _isDisposed = false;
   private _tool: ToolT;
 
+  public component_store = new component_store.Store(this)
+
   public arguments: msg.Arguments;
 
   public focus: ProjectContentProviderState;
@@ -699,7 +703,7 @@ export class Project {
   }
 
   /**
-   * Return state of content provider with a specified scheme.
+   * Return state of content provider with a specified sche me.
    *
    * The provider with a specified scheme must be at first registered in a
    * project with register() method.

@@ -1,0 +1,62 @@
+#sort-button:hover {
+  color : #007bff !important;
+}
+
+#config-button:hover {
+  color : #007bff !important;
+}
+
+.cst_link {
+  color : rgb(249, 163, 4) !important;
+  font-size: 1rem !important;
+  font-weight: bold;
+}
+
+.card-header {
+  padding-left: 0;
+}
+
+.cst_link:hover {
+  color : #007bffdc !important;
+}
+
+.orange {
+  color : orange !important;
+}
+
+.background_orange {
+  background-color : orange !important;
+}
+
+
+.black{
+  color : black !important;
+}
+
+.blue {
+  color : #007bff !important;
+}
+
+#conf_sort_asc{
+  font-size: 0.7rem;
+  height: 1.8rem;
+}
+
+#conf_sort_desc{
+  font-size: 0.7rem;
+  height: 1.8rem;
+}
+
+.funtions_loops_names{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.funtions_loops_names_p1{
+  width : '80%'
+}
+
+.funtions_loops_names_p2{
+  width : '80%'
+}

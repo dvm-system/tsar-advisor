@@ -1,0 +1,63 @@
+.pure_func_button_mark_pure{
+  color: #007bff !important;
+  border-color: #007bff !important;
+  background-color: white !important;
+  text-align: center !important;
+  padding: 0 !important;
+  font-size: 0.6rem !important;
+  width: 1.2rem;
+  height:  1.2rem;
+}
+
+.pure_func_button_mark_pure:hover{
+  color: rgb(249, 163, 4) !important;
+  border-color: rgb(249, 163, 4)!important;
+  background-color: white !important;
+  text-align: center !important;
+  padding: 0 !important;
+  font-size: 0.6rem !important;
+  width: 1.2rem;
+  height:  1.2rem;
+}
+
+.pure_func_button_mark_not_pure{
+  color: rgb(249, 163, 4) !important;
+  border-color: rgb(249, 163, 4) !important;
+  background-color: white !important;
+  text-align: center !important;
+  padding: 0 !important;
+  font-size: 0.6rem !important;
+  width: 1.2rem;
+  height:  1.2rem;
+}
+
+.pure_func_button_mark_not_pure:hover{
+  color: black !important;
+  border-color: black!important;
+  background-color: white !important;
+  text-align: center !important;
+  padding: 0 !important;
+  font-size: 0.6rem !important;
+  width: 1.2rem;
+  height:  1.2rem;
+}
+
+.pure_func_button_unmark{
+  color: black !important;
+  background-color: white !important;
+  text-align: center !important;
+  padding: 0 !important;
+  font-size: 0.6rem !important;
+  width: 1.2rem;
+  height:  1.2rem;
+}
+.pure_func_button_unmark:hover{
+  color: #007bff !important;
+  border-color: #007bff !important;
+  background-color: white !important;
+  text-align: center !important;
+  padding: 0 !important;
+  font-size: 0.6rem !important;
+  width: 1.2rem;
+  height:  1.2rem;
+}
