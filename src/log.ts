@@ -46,6 +46,7 @@ export class Project {
 }
 
 export class Error {
+  static gitIgnore = '{0} is in .gitignore';
   static serverNotFound = 'cannot find analysis server {0}';
   static serverVersion = 'unable to determine server version'
   static general = 'some errors have been occurred';

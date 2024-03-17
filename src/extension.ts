@@ -23,6 +23,7 @@ import * as t from './transformProvider';
 import server from './tools';
 import { FileListProvider } from './fileList';
 import { LoopTreeViewProvider } from './loopExplorer';
+import simpleGit, { SimpleGit } from 'simple-git'
 
 /**
  * Open log file (log.Extension.log), returns true on success.
@@ -89,6 +90,18 @@ export function activate(context: vscode.ExtensionContext) {
             project.providerState(FileListProvider.scheme).active = true;
             project.send(new msg.FileList);
             vscode.commands.executeCommand('tsar.function.list', project.uri);
+            
+            let git = simpleGit(path.dirname(project.uri.fsPath));
+            git.checkIsRepo()
+            .then(async (isRepo) => {
+              if (!isRepo) {
+                await git.init();
+              }
+            })
+            let GitFilePath = path.join(path.dirname(project.uri.fsPath), '.tsar_git');
+            if (!fs.existsSync(GitFilePath)) {
+              fs.writeFileSync(GitFilePath, '', 'utf-8'); // here can be written information that should be saved for git
+            }
           },
           reason => { onReject(reason, uri) })
     });

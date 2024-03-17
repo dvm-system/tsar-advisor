@@ -9,12 +9,15 @@
 'use strict'
 
 import * as vscode from 'vscode';
+import * as path from 'path';
+import * as fs from 'fs';
 import * as log from './log';
 import * as msg from './messages';
 import {DisposableLikeList, onReject} from './functions'; 
 import {Project, ProjectEngine, ProjectContentProvider,
   ProjectContentProviderState} from './project';
 import server from './tools';
+import simpleGit, { SimpleGit } from 'simple-git'
 
 /**
  * Register transformation command.
@@ -52,8 +55,35 @@ export function registerCommands(
               }).then((value) => {vscode.commands.executeCommand('tsar.stop', project.uri)});
               state.active = true;
               project.focus = state;
+              
+              let git = simpleGit(path.dirname(project.uri.fsPath));
+              let isRepo = await git.checkIsRepo()
+              if (!isRepo) {
+                await git.init();
+              }
+              let GitFilePath = path.join(path.dirname(project.uri.fsPath), '.tsar_git');
+              if (!fs.existsSync(GitFilePath)) {
+                fs.writeFileSync(GitFilePath, '', 'utf-8'); // here can be written information that should be saved for git
+              }
+              
+              let isIgnored = await git.checkIgnore(project.uri.fsPath)
+              if (isIgnored.some((path) => path == project.uri.fsPath)){
+                throw new Error(log.Error.gitIgnore.replace('{0}', project.uri.fsPath));
+              } else {
+                await git.add(project.uri.fsPath);
+                await git.commit(`${path.basename(project.uri.fsPath)} before sapfor transformation ${info.title}`, project.uri.fsPath, {"--author": "Tsar-advisor <sapfor extension>"});
+              }
+              
               await engine.runTool(project, info.run)
               project.send('');
+
+              isIgnored = await git.checkIgnore(project.uri.fsPath);
+              if (isIgnored.some((path) => path == project.uri.fsPath)){
+                throw new Error(log.Error.gitIgnore.replace('{0}', project.uri.fsPath));
+              } else {
+                await git.add(project.uri.fsPath);
+                await git.commit(`${path.basename(project.uri.fsPath)} after sapfor transformation ${info.title}`, project.uri.fsPath, {"--author": "Tsar-advisor <sapfor extension>"});
+              }
             },
             reason => { return onReject(reason, uri) })
       }))
